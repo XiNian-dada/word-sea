@@ -1,0 +1,42 @@
+.wordsea-friends-editor {
+    --ws-border: #d8dde2;
+    margin-top: 12px;
+}
+.wordsea-friends-editor *, .wordsea-friends-editor *::before {
+    box-sizing: border-box;
+}
+.wordsea-friends-editor .ws-toolbar, .wordsea-friends-editor .ws-card-head,
+.wordsea-friends-editor .ws-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.wordsea-friends-editor .ws-toolbar { margin-bottom: 12px; }
+.wordsea-friends-editor .ws-card {
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--ws-border);
+    border-radius: 6px;
+    background: #fff;
+}
+.wordsea-friends-editor .ws-card-head { justify-content: space-between; margin-bottom: 14px; }
+.wordsea-friends-editor .ws-card-title { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.wordsea-friends-editor .ws-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px 16px;
+}
+.wordsea-friends-editor .ws-field label { display: block; font-size: 13px; margin-bottom: 5px; }
+.wordsea-friends-editor .ws-field input[type="text"] { width: 100%; margin: 0; }
+.wordsea-friends-editor .ws-actions .btn { padding: 4px 9px; height: auto; line-height: 1.5; }
+.wordsea-friends-editor .ws-remove { color: #a13939; }
+.wordsea-friends-editor button:focus-visible { outline: 2px solid #467b96; outline-offset: 2px; }
+.wordsea-friends-editor .ws-empty { padding: 20px; border: 1px dashed var(--ws-border); border-radius: 6px; color: #666; }
+.wordsea-friends-editor .ws-status { color: #596773; margin: 10px 0; min-height: 20px; }
+.wordsea-friends-editor .ws-status.ws-error { color: #b33131; }
+textarea[data-wordsea-friends][hidden] { display: none !important; }
+@media (max-width: 600px) {
+    .wordsea-friends-editor .ws-fields { grid-template-columns: minmax(0, 1fr); }
+    .wordsea-friends-editor .ws-card { padding: 12px; }
+}
