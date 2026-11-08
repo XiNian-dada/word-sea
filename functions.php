@@ -43,9 +43,11 @@ function themeConfig($form)
 /** Theme file URL with its modification time, so every edit busts caches by itself. */
 function wordsea_asset($path)
 {
+    $options = \Widget\Options::alloc();
     $file = __DIR__ . '/' . ltrim($path, '/');
     $version = is_file($file) ? (string) filemtime($file) : '0';
-    return wordsea_escape(\Widget\Options::alloc()->themeUrl($path) . '?v=' . $version);
+    // themeUrl() echoes its result unless it is given a theme name; this form returns it.
+    return wordsea_escape($options->themeUrl($path, $options->theme) . '?v=' . $version);
 }
 
 function wordsea_escape($value)
