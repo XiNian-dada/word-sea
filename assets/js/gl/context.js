@@ -130,8 +130,3 @@ export function createTarget(gl, width, height, { float = false } = {}) {
   if (!complete) { gl.deleteFramebuffer(framebuffer); gl.deleteTexture(texture); return null; }
   return { texture, framebuffer, width, height, float };
 }
-
-/** One vertex array with no attributes: full-screen passes derive positions from gl_VertexID. */
-export function emptyVertexArray(gl) {
-  return gl.createVertexArray();
-}

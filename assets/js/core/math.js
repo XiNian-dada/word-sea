@@ -9,7 +9,6 @@ export const smoothstep = (a, b, x) => {
 /** Frame-rate independent exponential approach; `rate` is 1/seconds. */
 export const damp = (current, target, rate, dt) => lerp(current, target, 1 - Math.exp(-rate * dt));
 export const easeInOut = t => t * t * t * (t * (t * 6 - 15) + 10);
-export const TAU = Math.PI * 2;
 export const DEG = Math.PI / 180;
 
 /** Deterministic LCG so every visitor sees the same arrangement of words. */
@@ -19,21 +18,6 @@ export function random(seed) {
     state = (state * 1664525 + 1013904223) >>> 0;
     return state / 4294967296;
   };
-}
-
-export function shuffle(items, rand = Math.random) {
-  const out = items.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
-
-/** Angle-aware interpolation for radians. */
-export function lerpAngle(a, b, t) {
-  const delta = Math.atan2(Math.sin(b - a), Math.cos(b - a));
-  return a + delta * t;
 }
 
 export const vec3 = {
