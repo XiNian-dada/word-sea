@@ -28,17 +28,24 @@ function themeConfig($form)
     $friends->container($editor);
     $fallback = new \Typecho\Widget\Helper\Layout('noscript');
     $friends->container($fallback->html('<p class="description">当前浏览器未启用 JavaScript，可直接编辑上方 JSON。每项填写 name、url，description 和 avatar 选填。留空使用预置友链，填写 [] 表示空列表。</p>'));
-    $options = \Widget\Options::alloc();
     $friends->container(new \Typecho\Widget\Helper\Layout('link', [
-        'rel' => 'stylesheet', 'href' => wordsea_escape($options->themeUrl('assets/admin.css?v=0.1.3', $options->theme))
+        'rel' => 'stylesheet', 'href' => wordsea_asset('assets/admin.css')
     ]));
     $script = new \Typecho\Widget\Helper\Layout('script', [
-        'src' => wordsea_escape($options->themeUrl('assets/admin.js?v=0.1.3', $options->theme)), 'defer' => 'defer'
+        'src' => wordsea_asset('assets/admin.js'), 'defer' => 'defer'
     ]);
     $friends->container($script->setClose(false));
     $form->addInput($friends->addRule('wordsea_friends_valid', '友链名称不能为空，网址及头像须为有效的 http/https 地址；JSON 模式下请填写数组'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Radio('wordSeaAjax', ['1' => '开启', '0' => '关闭，使用普通页面跳转'], '1', '场景转场', '含额外脚本的插件页面会自动使用普通跳转，以保留插件行为。'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Text('wordSeaFooter', null, '', '页脚文字', '纯文字，例如版权说明或备案号。'));
+}
+
+/** Theme file URL with its modification time, so every edit busts caches by itself. */
+function wordsea_asset($path)
+{
+    $file = __DIR__ . '/' . ltrim($path, '/');
+    $version = is_file($file) ? (string) filemtime($file) : '0';
+    return wordsea_escape(\Widget\Options::alloc()->themeUrl($path) . '?v=' . $version);
 }
 
 function wordsea_escape($value)
