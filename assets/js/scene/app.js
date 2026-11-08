@@ -5,6 +5,7 @@ import { Corridor } from './corridor.js';
 import { Particles, Lanterns } from './particles.js';
 import { PRESETS, themeAtHour } from './atmosphere.js';
 import { buildAtlas } from './atlas.js';
+import { Governor, Pacer } from './pacing.js';
 
 const SEA_WORDS = ['海', 'sea', 'mer', 'mar', 'Meer', 'mare', 'море', 'θάλασσα', 'بحر', 'ים', 'समुद्र', 'সমুদ্র', 'கடல்', 'సముద్రం', 'ทะเล', 'biển', '바다', 'laut', 'deniz', 'bahari', 'havet', 'meri', 'sjór', 'muir'];
 const CLOUD_WORDS = ['云', '雲', 'cloud', 'nuage', 'nube', 'Wolke', 'nuvola', 'облако', 'سحابة', 'ענן', 'बादल', 'মেঘ', 'மேகம்', 'เมฆ', 'mây', '구름', 'awan', 'bulut', 'wingu', 'moln', 'pilvi', 'ský', 'scamall'];
@@ -13,7 +14,6 @@ const ACCENTS = {
   afternoon: ['#ffd8a8', '#3d6d97'], sunset: ['#ffc59a', '#25182b'], night: ['#bed3ff', '#070c1b'],
 };
 const LABELS = { sea: '由多语言文字组成的动态海洋', article: '多语言名言长廊与文章阅读', friends: '文字海洋上的友链灯火' };
-const FRAME_INTERVAL = 1000 / 60;
 
 const $ = id => document.getElementById(id);
 const config = JSON.parse($('wordsea-config').textContent);
@@ -69,34 +69,26 @@ function start() {
   }
 
   // ——— Frame scheduling ———
-  let raf = 0, last = 0, lost = false, scale = 1, maxScale = 1, slow = 0, fast = 0, lastAdapt = 0, frames = 0;
+  let raf = 0, last = 0, lost = false, frames = 0;
+  const pacer = new Pacer(), governor = new Governor();
   const viewport = { width: 1, height: 1 };
   function measure() {
     viewport.width = Math.max(1, root.clientWidth); viewport.height = Math.max(1, root.clientHeight);
     // Cap the backing store near four megapixels; quality adapts from there.
-    maxScale = Math.min(devicePixelRatio || 1, 1.75, Math.sqrt(4.2e6 / (viewport.width * viewport.height)));
-    scale = Math.min(scale === 1 && !lastAdapt ? maxScale : scale, maxScale);
+    governor.setMax(Math.min(devicePixelRatio || 1, 1.75, Math.sqrt(4.2e6 / (viewport.width * viewport.height))));
     world.setViewport(viewport.width, viewport.height);
-    renderer.resize(viewport.width, viewport.height, scale);
+    renderer.resize(viewport.width, viewport.height, governor.scale);
     layoutLanterns();
     invalidate();
   }
   function invalidate() { if (!raf && !document.hidden && !lost) raf = requestAnimationFrame(frame); }
-  function adapt(now, dt) {
-    // Measured frame time drives resolution: keep motion fluid before keeping pixels.
-    if (dt > .0215) slow++; else if (dt < .0175) fast++;
-    if (now - lastAdapt < 1500 || slow + fast < 45) return;
-    if (slow > 18 && scale > .55) scale = Math.max(.55, scale * .84);
-    else if (slow < 3 && scale < maxScale) scale = Math.min(maxScale, scale * 1.1);
-    slow = fast = 0; lastAdapt = now;
-    renderer.resize(viewport.width, viewport.height, scale);
-  }
   function frame(now) {
     raf = 0;
     if (document.hidden || lost) return;
-    if (last && now - last < FRAME_INTERVAL - 1.5) { raf = requestAnimationFrame(frame); return; }
+    if (!pacer.due(now)) { raf = requestAnimationFrame(frame); return; }
     const dt = last ? Math.min((now - last) / 1000, .1) : 0;
-    if (last) adapt(now, dt);
+    // Measured smoothness drives resolution: keep motion fluid before keeping pixels.
+    if (governor.sample(now)) renderer.resize(viewport.width, viewport.height, governor.scale);
     last = now;
     let animating = false;
 
@@ -138,7 +130,7 @@ function start() {
     if (corridor.state.reveal > 0) scene.frames++;
     if (harbor.mix > 0) harbor.frames++;
     if (animating) raf = requestAnimationFrame(frame);
-    else last = 0;
+    else { last = 0; governor.restart(); }
   }
 
   function updateCorridor() {
@@ -439,7 +431,7 @@ function start() {
     invalidate();
   });
   document.addEventListener('visibilitychange', () => {
-    cancelAnimationFrame(raf); raf = 0; last = 0;
+    cancelAnimationFrame(raf); raf = 0; last = 0; governor.restart();
     if (!document.hidden) { if (state.automatic) setTheme('auto'); invalidate(); }
   });
   setInterval(() => { if (state.automatic && weatherTheme() !== state.theme) setTheme('auto'); }, 30000);
@@ -456,7 +448,7 @@ function start() {
     setFriends: bindFriends,
     getState: () => ({
       theme: PRESETS[state.theme].label, automatic: state.automatic, wind: world.wind, density: world.density,
-      paused: world.paused, clouds: world.cloudsTarget > .5, time: world.time, frames, scale: +scale.toFixed(2),
+      paused: world.paused, clouds: world.cloudsTarget > .5, time: world.time, frames, scale: +governor.scale.toFixed(2),
       words: SEA_WORDS.length, ripples: world.ripples.length,
       scene: scene.target ? 'article' : harbor.target ? 'friends' : 'sea', article: scene.article,
       transitioning: scene.transitioning || harbor.transitioning, transition: scene.mix, passageFrames: scene.frames,
