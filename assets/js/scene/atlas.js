@@ -10,7 +10,8 @@ function startWorker() {
   try {
     // OffscreenCanvas text needs a 2D context inside the worker; probe once.
     if (!new OffscreenCanvas(1, 1).getContext('2d')) return worker;
-    worker = new Worker(new URL('./text-atlas.js', import.meta.url), { type: 'module' });
+    // Resolved through the import map, so the worker runs the page's version of the file.
+    worker = new Worker(import.meta.resolve?.('./text-atlas.js') ?? new URL('./text-atlas.js', import.meta.url), { type: 'module' });
     worker.onmessage = ({ data }) => {
       const job = pending.get(data.id);
       if (!job) return;

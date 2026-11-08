@@ -43,11 +43,35 @@ function themeConfig($form)
 /** Theme file URL with its modification time, so every edit busts caches by itself. */
 function wordsea_asset($path)
 {
+    return wordsea_escape(wordsea_asset_url($path));
+}
+
+function wordsea_asset_url($path)
+{
     $options = \Widget\Options::alloc();
     $file = __DIR__ . '/' . ltrim($path, '/');
     $version = is_file($file) ? (string) filemtime($file) : '0';
     // themeUrl() echoes its result unless it is given a theme name; this form returns it.
-    return wordsea_escape($options->themeUrl($path, $options->theme) . '?v=' . $version);
+    return $options->themeUrl($path, $options->theme) . '?v=' . $version;
+}
+
+/**
+ * Import map from every script module to its versioned URL. Relative imports
+ * drop the entry's ?v=, so without it an update could pair a fresh main.js
+ * with stale cached modules.
+ */
+function wordsea_import_map()
+{
+    $options = \Widget\Options::alloc();
+    $root = __DIR__ . '/assets/js/';
+    $imports = [];
+    foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)) as $file) {
+        if ($file->getExtension() !== 'js') continue;
+        $path = 'assets/js/' . str_replace('\\', '/', substr($file->getPathname(), strlen($root)));
+        $imports[$options->themeUrl($path, $options->theme)] = wordsea_asset_url($path);
+    }
+    ksort($imports);
+    return wordsea_json(['imports' => $imports]);
 }
 
 function wordsea_escape($value)

@@ -16,6 +16,7 @@ $wordSeaIcon = [
   <meta name="theme-color" content="#25182b">
   <title><?php $this->archiveTitle(['category'=>'分类 · %s','tag'=>'标签 · %s','search'=>'搜索 · %s','author'=>'作者 · %s'], '', ' · '); ?><?php echo wordsea_escape($this->options->title); ?></title>
   <link rel="stylesheet" href="<?php echo wordsea_asset('assets/css/theme.css'); ?>">
+  <script type="importmap" data-wordsea-runtime><?php echo wordsea_import_map(); ?></script>
   <link rel="modulepreload" href="<?php echo wordsea_asset('assets/js/scene/app.js'); ?>">
   <?php $this->header('commentReply=&antiSpam='); ?>
   <noscript><style>.dock,.passage-tools,.weather-chip{display:none}</style></noscript>
