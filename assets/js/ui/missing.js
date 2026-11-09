@@ -14,7 +14,17 @@ function text(value, max) {
 function feature(value) {
   return typeof value === 'string' && !PRIVATE.test(value) ? text(value.replace(/^\s*特征[:：]/, '').replace(/(姓名|年龄|身高|籍贯)[:：]\s*\S+?(?=\s|[，,；;]|$)[\s，,；;]*/g, ''), 90) : '';
 }
-const day = value => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? value.replaceAll('-', '.') : '');
+// 1900-01-01 is the charity's placeholder for an unknown date.
+const day = value => (/^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith('1900') ? value.replaceAll('-', '.') : '');
+// Addresses often repeat the province and city, e.g. 广东省,珠海市,金湾区,广东省珠海市金湾区贵山.
+function place(value) {
+  const kept = [];
+  for (let part of typeof value === 'string' ? value.split(/[,，\s]+/) : []) {
+    for (const earlier of kept) if (part.startsWith(earlier)) part = part.slice(earlier.length);
+    if (part && !kept.includes(part)) kept.push(part);
+  }
+  return text(kept.join(' '), 80);
+}
 function photo(value) {
   try {
     // Only the charity's own image host, so the API cannot place arbitrary images here.
@@ -30,14 +40,13 @@ function record(json) {
   const data = json?.code === 200 && json.success !== false ? json.data : null,
     name = text(data?.name, 40);
   if (!name || /已找到|已回家|已团圆/.test(name + (data.typeName || ''))) throw new Error('Unusable record');
-  const place = typeof data.lostAddress === 'string' ? data.lostAddress.split(/[,，]/) : [];
   return {
     name,
     about: [data.sex === '男' || data.sex === '女' ? data.sex : '', text(data.typeName, 12)].filter(Boolean).join(' · '),
     facts: [
       ['出生', day(data.birthDay)],
       ['失散', day(data.lostDay)],
-      ['地点', text(place.map(part => part.trim()).filter(Boolean).join(' '), 80)],
+      ['地点', place(data.lostAddress)],
       ['特征', feature(data.feature)],
     ].filter(([, value]) => value),
     photo: data.isPhotos ? photo(data.photoUrl) : '',
@@ -49,19 +58,48 @@ function element(tag, className, content) {
   if (content) node.textContent = content;
   return node;
 }
-function render(box, person) {
+function portrait(person) {
+  if (!person.photo) return null;
+  const image = new Image();
+  image.alt = person.name + '的照片';
+  // Neither the visitor's address nor a hot-link check reaches the photo host.
+  image.referrerPolicy = 'no-referrer';
+  image.decoding = 'async';
+  let retried = false;
+  image.addEventListener('load', () => image.parentNode?.classList.add('has-photo'));
+  image.addEventListener('error', () => {
+    // The host's firewall answers bursts with a 429 and Retry-After: 5, so try once more after that.
+    if (!retried) {
+      retried = true;
+      setTimeout(() => { if (image.isConnected) image.src = person.photo; }, 5500);
+    } else image.remove();
+  });
+  image.src = person.photo;
+  return image;
+}
+// Hold the previous card briefly so the photo arrives with the name instead of popping in after it.
+function settled(image, signal) {
+  if (!image || image.complete) return Promise.resolve();
+  return new Promise(resolve => {
+    const timer = setTimeout(done, 2500);
+    function done() {
+      clearTimeout(timer);
+      image.removeEventListener('load', done);
+      image.removeEventListener('error', done);
+      signal.removeEventListener('abort', done);
+      resolve();
+    }
+    image.addEventListener('load', done);
+    image.addEventListener('error', done);
+    signal.addEventListener('abort', done);
+  });
+}
+function render(box, person, image) {
   // The frame shows 寻 until the photo arrives, and keeps it if there is none.
   const frame = element('span', 'missing-frame');
-  if (person.photo) {
-    const image = new Image();
-    image.alt = person.name + '的照片';
-    // Neither the visitor's address nor a hot-link check reaches the photo host.
-    image.referrerPolicy = 'no-referrer';
-    image.decoding = 'async';
-    image.addEventListener('load', () => frame.classList.add('has-photo'), { once: true });
-    image.addEventListener('error', () => image.remove(), { once: true });
-    image.src = person.photo;
+  if (image) {
     frame.append(image);
+    if (image.complete && image.naturalWidth) frame.classList.add('has-photo');
   }
   const name = element('p', 'missing-name', person.name);
   if (person.about) name.append(element('small', '', person.about));
@@ -96,7 +134,10 @@ export default function setup() {
         if (!response.ok) throw new Error('HTTP ' + response.status);
         try { person = record(await response.json()); } catch { if (attempt === 3) throw new Error('No usable record'); }
       }
-      render(box, person);
+      const image = portrait(person);
+      await settled(image, request.signal);
+      if (request.signal.aborted) throw new Error('Aborted');
+      render(box, person, image);
       section.hidden = false;
       next.textContent = '换一位';
     } catch {
