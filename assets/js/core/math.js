@@ -21,11 +21,6 @@ export function random(seed) {
 }
 
 export const vec3 = {
-  normalize(out, x, y, z) {
-    const length = Math.hypot(x, y, z) || 1;
-    out[0] = x / length; out[1] = y / length; out[2] = z / length;
-    return out;
-  },
   fromAngles(out, elevation, azimuth) {
     // Azimuth 0 looks down -Z (the camera's forward direction); positive turns right.
     const c = Math.cos(elevation);
