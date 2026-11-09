@@ -10,6 +10,7 @@ export class Corridor {
   constructor(renderer) {
     const gl = renderer.gl;
     this.gl = gl;
+    this.caps = renderer.caps;
     this.program = new Program(gl, { vertex: FULLSCREEN_VERTEX, fragment: CORRIDOR_FRAGMENT, defines: { FULLSCREEN_DEPTH: '0.0' }, label: 'corridor' });
     this.vao = renderer.vao;
     this.quotes = createTexture(gl, { width: 1, height: 1, data: new Uint8Array(4), wrap: gl.REPEAT });
@@ -26,9 +27,7 @@ export class Corridor {
   setAtlas({ pixels, columns, size }) {
     const gl = this.gl;
     gl.deleteTexture(this.quotes);
-    this.quotes = createTexture(gl, { width: size, height: size, data: pixels, wrap: gl.REPEAT, mipmaps: true, anisotropy: 8, caps: null });
-    const ext = gl.getExtension('EXT_texture_filter_anisotropic');
-    if (ext) gl.texParameterf(gl.TEXTURE_2D, ext.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+    this.quotes = createTexture(gl, { width: size, height: size, data: pixels, wrap: gl.REPEAT, mipmaps: true, anisotropy: 8, caps: this.caps });
     const ids = new Uint8Array(size * 4);
     for (const column of columns) {
       for (let x = Math.floor(column.left); x < Math.min(size, Math.ceil(column.left + column.width)); x++) { ids[x * 4] = column.id + 1; ids[x * 4 + 3] = 255; }
