@@ -147,19 +147,18 @@
 
 ## 文件说明
 
-- `functions.php`：后台设置、场景选择、友链数据与安全输出。
+- `functions.php`：后台设置、场景选择、友链数据与安全输出；`wordsea_asset()` 以文件修改时间为静态资源加版本号，`wordsea_import_map()` 让每个脚本模块都带上版本号。
 - `friends.json`：三条预置友链，供后台一键追加及默认列表使用。
-- `layout.php` 和各页面模板：服务端内容与公共页面结构。
-- `assets/scene.js` / `scene.css`：文字海洋、语廊、灯火及转场。
-- `assets/weather.js` / `weather.css`：实况天气、城市选择、可选定位及天气体验面板。
-- `assets/blog.js` / `blog.css`：真实链接导航、评论回复和博客排版。
-- `assets/media.js`：代码窗口与可缩放的图片灯箱，兼容文章转场后的重新初始化。
-- `assets/highlight.js` / `assets/vendor/prism.js`：按需处理代码高亮，PrismJS 1.30.0 按 MIT 许可证使用，原许可证保留在 `assets/vendor/prism-LICENSE.txt`。
+- `layout.php` 和各页面模板：服务端内容与公共页面结构，三个场景共用一个页面骨架。
+- `assets/css/theme.css`：三个场景、阅读排版、对话框与响应式布局的全部样式。
+- `assets/js/main.js`：唯一的脚本入口，先启动场景，再依次初始化各界面模块。
+- `assets/js/scene/`：单画布 WebGL2 场景。`app.js` 负责按需绘制和场景转场，`world.js` 计算海浪、光线、天气与相机，`renderer.js` 绘制海面和天空，`corridor.js` 是语廊高墙，`particles.js` 是雨雪与友链灯火，`pacing.js` 控制帧率与画布分辨率，`atlas.js` / `text-atlas.js` 在后台线程生成文字纹理。
+- `assets/js/gl/`：WebGL2 程序、纹理等辅助函数与着色器源码。
+- `assets/js/core/math.js`：场景使用的向量、矩阵与插值函数。
+- `assets/js/ui/`：`navigation.js` 真实链接导航与评论回复，`weather.js` 实况天气面板，`reading.js` 阅读进度、目录与续读，`collect.js` 拾句卡片，`media.js` 代码窗口与图片灯箱，`highlight.js` 按需代码高亮，`responsive.js` 手机设置弹层与动态可用高度，`tools.js` 本地存储与复制。
+- `assets/collect-data.js`：多语言名言、释义和来源。
+- `assets/vendor/prism.js`：PrismJS 1.30.0，按 MIT 许可证使用，原许可证保留在 `assets/vendor/prism-LICENSE.txt`。
 - `assets/admin.js` / `admin.css`：后台可视化友链编辑器，只在设置外观页加载。
-- `assets/collect.js` / `collect-data.js`：随机拾句、摘句复制、多语言名言释义和来源。
-- `assets/reading.js` / `reader.css`：阅读进度、目录、章节链接与续读提示。
-- `assets/reader-tools.js`：本地存储与摘句、章节链接的复制工具。
-- `assets/responsive.js` / `responsive.css`：手机设置弹层、安全区与动态可用高度。
 - `QUOTES.md`：墙面名言及出处；修改句子时请同步来源记录。
 - `screenshot.png`：主题首页截图，供 Typecho 外观页预览。
 
