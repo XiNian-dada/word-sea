@@ -69,7 +69,7 @@ export class World {
         lanterns: new Float32Array(18), lanternColors: new Float32Array(18),
       },
       clouds: { offset: new Float32Array(2), cover: 0, ink: 1, enabled: 1 },
-      weather: { rain: 0, snow: 0, windSpeed: 0 },
+      weather: { rain: 0, snow: 0, windSpeed: 0, drift: [0, 0] },
     };
     this.viewport = { width: 1, height: 1 };
     this.lastLight = '';
@@ -308,6 +308,11 @@ export class World {
     f.weather.rain = w.rain * w.active;
     f.weather.snow = w.snow * w.active;
     f.weather.windSpeed = (1 + this.waveWind * 9) * w.active;
+    if (!this.paused) {
+      // Integrated as well: a gust never throws drops already in the air sideways.
+      f.weather.drift[0] += s.windDir[0] * f.weather.windSpeed * dt;
+      f.weather.drift[1] += s.windDir[1] * f.weather.windSpeed * dt;
+    }
     return animating;
   }
 }

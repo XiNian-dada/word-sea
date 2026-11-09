@@ -3,6 +3,9 @@ import { Program } from '../gl/context.js';
 // Rain, snow and the friends' lanterns. All are camera-facing quads expanded in
 // the vertex shader from one instanced attribute, depth-tested against the sea.
 
+const BOX = [70, 34, 90];
+const wrap = (value, size) => value - Math.floor(value / size) * size;
+
 const PARTICLE_VERTEX = /* glsl */`
 in vec4 aSeed;                 // x, y, z in 0…1, w random
 uniform mat4 uViewProj;
@@ -10,20 +13,20 @@ uniform vec3 uCamera;
 uniform float uTime;
 uniform float uSnow;           // 0 rain, 1 snow
 uniform vec2 uWind;
+uniform vec2 uDrift;           // sideways travel so far, wrapped to the box
 uniform float uFall;
 uniform float uAmount;
 uniform vec2 uViewport;
 out vec2 vQuad;
 out float vAlpha;
-const vec3 BOX = vec3(70.0, 34.0, 90.0);
+const vec3 BOX = vec3(${BOX.map(v => v.toFixed(1)).join(', ')});
 
 void main() {
   vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1)) * 2.0 - 1.0;
   vQuad = corner;
   vAlpha = step(aSeed.w, uAmount);
   float speed = mix(uFall, uFall * .09, uSnow) * (.8 + aSeed.w * .4);
-  vec3 drift = vec3(uWind.x, 0.0, uWind.y) * uTime * mix(1.0, .45, uSnow);
-  vec3 p = aSeed.xyz * BOX - vec3(0.0, uTime * speed, 0.0) + drift;
+  vec3 p = aSeed.xyz * BOX - vec3(0.0, uTime * speed, 0.0) + vec3(uDrift.x, 0.0, uDrift.y);
   // Wrap the volume around the eye so particles never run out.
   vec3 origin = uCamera - vec3(BOX.x * .5, 2.0, BOX.z * .95);
   p = origin + mod(p - origin, BOX);
@@ -132,6 +135,7 @@ export class Particles {
     this.viewport = new Float32Array(2);
     this.color = new Float32Array(3);
     this.wind = new Float32Array(2);
+    this.drift = new Float32Array(2);
   }
 
   draw(frame, renderer) {
@@ -151,7 +155,10 @@ export class Particles {
     gl.bindVertexArray(this.vao);
     for (const [snow, amount] of [[0, w.rain], [1, w.snow]]) {
       if (amount < .003) continue;
-      p.set('uSnow', snow).set('uFall', 26).set('uAmount', amount);
+      // Snow drifts at under half the wind's pace.
+      const carried = snow ? .45 : 1;
+      this.drift[0] = wrap(w.drift[0] * carried, BOX[0]); this.drift[1] = wrap(w.drift[1] * carried, BOX[2]);
+      p.set('uSnow', snow).set('uFall', 26).set('uAmount', amount).set('uDrift', this.drift);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.round(this.count * Math.min(1, .25 + amount)));
     }
     gl.depthMask(true); gl.disable(gl.BLEND);
