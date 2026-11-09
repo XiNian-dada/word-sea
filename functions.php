@@ -100,6 +100,12 @@ function wordsea_scene($archive)
     return $archive->is('single') ? 'article' : 'sea';
 }
 
+/** Typecho files a missing page as an archive with the slug 404, so is('404') never matches it. */
+function wordsea_is_404($archive)
+{
+    return $archive->getArchiveType() === 'archive' && (string) $archive->getArchiveSlug() === '404';
+}
+
 function wordsea_pages()
 {
     static $rows;

@@ -1,7 +1,7 @@
-<?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; ?>
+<?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; $wordSeaLost = wordsea_is_404($this); ?>
 <h2 class="journal-label" id="journal-heading" tabindex="-1"><?php $this->archiveTitle(['category'=>'分类 · %s','tag'=>'标签 · %s','search'=>'搜索 · %s','author'=>'作者 · %s'], '', ''); ?><?php if ($this->is('index')): ?>NOTES FROM THE SHORE · 海边的文字<?php endif; ?></h2>
 <div class="journal-scroll">
-<?php if (!$this->is('single') && !$this->is('404')): ?>
+<?php if (!$this->is('single') && !$wordSeaLost): ?>
   <?php if ($this->have()): $wordSeaNumber = 0; while ($this->next()): $wordSeaNumber++; ?>
     <a class="story-link" href="<?php $this->permalink(); ?>" data-wordsea-link>
       <span class="story-number"><?php echo str_pad($wordSeaNumber, 2, '0', STR_PAD_LEFT); ?></span>
@@ -11,12 +11,12 @@
   <?php endwhile; else: ?>
     <p class="empty-note">这片海还没有新的文字。</p>
   <?php endif; ?>
-<?php elseif ($this->is('404')): ?>
+<?php elseif ($wordSeaLost): ?>
   <p class="empty-note">这页文字漂向了别处。</p><a href="<?php $this->options->siteUrl(); ?>" data-wordsea-link>返回首页</a>
 <?php endif; ?>
 </div>
 <div class="journal-tools">
-<div class="journal-pagination"><?php if (!$this->is('single') && !$this->is('404')) $this->pageNav('上一页','下一页',1,'…'); ?></div>
+<div class="journal-pagination"><?php if (!$this->is('single') && !$wordSeaLost) $this->pageNav('上一页','下一页',1,'…'); ?></div>
 <nav class="site-pages" aria-label="博客页面">
   <?php $wordSeaFriendEntry = false; foreach (wordsea_pages() as $wordSeaPage): ?>
     <a href="<?php echo wordsea_escape($wordSeaPage['url']); ?>" data-wordsea-link<?php if ($wordSeaPage['friends'] && !$wordSeaFriendEntry): $wordSeaFriendEntry = true; ?> id="open-friends"<?php endif; ?>><?php echo wordsea_title_escape($wordSeaPage['title']); ?></a>
