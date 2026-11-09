@@ -1,5 +1,5 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; $wordSeaConfig = wordsea_config($this); ?>
-<?php if (wordsea_scene($this) === 'friends' && $this->hidden): ?>
+<?php if ($wordSeaConfig['scene'] === 'friends' && $this->hidden): ?>
   <div class="friends-locked"><?php $this->content(); ?></div>
 <?php else: ?>
   <?php foreach ($wordSeaConfig['friends'] as $wordSeaIndex => $wordSeaFriend): ?>

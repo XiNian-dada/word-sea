@@ -148,21 +148,26 @@ function wordsea_friends($options)
 
 function wordsea_config($archive)
 {
+    // The layout and the friends list both ask; the page is the same object.
+    static $cache = [];
+    $key = spl_object_id($archive);
+    if (isset($cache[$key])) return $cache[$key];
     $options = \Widget\Options::alloc(); $friendsUrl = '';
     foreach (wordsea_pages() as $page) { if ($page['friends']) { $friendsUrl = $page['url']; break; } }
     $all = wordsea_friends($options); $pages = max(1, (int) ceil(count($all) / 6));
     $page = max(1, min($pages, (int) $archive->request->get('friends_page', 1)));
     $theme = (string) $options->wordSeaTime;
     if (!in_array($theme, ['auto','daybreak','morning','noon','afternoon','sunset','night'], true)) $theme = 'auto';
-    return [
-        'scene' => wordsea_scene($archive), 'homeUrl' => (string) $options->siteUrl,
+    $scene = wordsea_scene($archive);
+    return $cache[$key] = [
+        'scene' => $scene, 'homeUrl' => (string) $options->siteUrl,
         'friendsUrl' => $friendsUrl, 'siteTitle' => (string) $options->title,
         'theme' => $theme,
         'weather' => ['mode' => in_array((string) $options->wordSeaWeather, ['auto','city','off'], true) ? (string) $options->wordSeaWeather : 'auto', 'city' => mb_substr(trim((string) $options->wordSeaWeatherCity), 0, 80, 'UTF-8')],
         'wind' => max(0, min(100, is_numeric($options->wordSeaWind) ? (int) $options->wordSeaWind : 45)),
         'density' => max(30, min(100, is_numeric($options->wordSeaDensity) ? (int) $options->wordSeaDensity : 95)),
         'ajax' => (string) $options->wordSeaAjax !== '0',
-        'friends' => wordsea_scene($archive) === 'friends' ? array_slice($all, ($page - 1) * 6, 6) : [], 'friendsCount' => count($all),
+        'friends' => $scene === 'friends' ? array_slice($all, ($page - 1) * 6, 6) : [], 'friendsCount' => count($all),
         'friendsPage' => $page, 'friendsPages' => $pages
     ];
 }
