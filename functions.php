@@ -36,6 +36,7 @@ function themeConfig($form)
     ]);
     $friends->container($script->setClose(false));
     $form->addInput($friends->addRule('wordsea_friends_valid', '友链名称不能为空，网址及头像须为有效的 http/https 地址；JSON 模式下请填写数组'));
+    $form->addInput(new \Typecho\Widget\Helper\Form\Element\Radio('wordSeaMissing', ['1' => '开启', '0' => '关闭'], '1', '404 公益寻人', '404 页面随机展示一条「宝贝回家」的寻人信息，由访客浏览器经盒盖 API 获取；接口不可用时只显示页面未找到。'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Radio('wordSeaAjax', ['1' => '开启', '0' => '关闭，使用普通页面跳转'], '1', '场景转场', '含额外脚本的插件页面会自动使用普通跳转，以保留插件行为。'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Text('wordSeaFooter', null, '', '页脚文字', '纯文字，例如版权说明或备案号。'));
 }

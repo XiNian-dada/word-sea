@@ -8,7 +8,8 @@ import media from './ui/media.js';
 import reading from './ui/reading.js';
 import collect from './ui/collect.js';
 import navigation from './ui/navigation.js';
+import missing from './ui/missing.js';
 
-for (const setup of [responsive, weather, highlight, media, reading, collect, navigation]) {
+for (const setup of [responsive, weather, highlight, media, reading, collect, navigation, missing]) {
   try { setup(); } catch (error) { console.error(error); }
 }

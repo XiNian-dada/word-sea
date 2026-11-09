@@ -153,6 +153,7 @@ export default function setup() {
       if (next.scene === 'sea') {
         lastSeaUrl = url.href;
         document.getElementById('journal').innerHTML = doc.getElementById('journal').innerHTML;
+        document.dispatchEvent(new Event('wordsea:journal-ready'));
       }
       if (next.scene === 'article') {
         document.getElementById('article-text').innerHTML = doc.getElementById('article-text').innerHTML;
