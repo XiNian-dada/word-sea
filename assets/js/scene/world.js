@@ -72,7 +72,7 @@ export class World {
       weather: { rain: 0, snow: 0, windSpeed: 0, drift: [0, 0] },
     };
     this.viewport = { width: 1, height: 1 };
-    this.lastLight = '';
+    this.lightDirty = true;
     this.updateAtmosphere();
   }
 
@@ -91,6 +91,7 @@ export class World {
     this.presetTarget = PRESETS[name];
     this.presetBlend = animate ? 0 : 1;
     if (!animate) blendPreset(this.preset, this.presetFrom, this.presetTarget, 1);
+    this.lightDirty = true;
   }
 
   /** Height of the swell (without ripples) at a world point. */
@@ -188,11 +189,11 @@ export class World {
 
   updateAtmosphere() {
     const p = this.preset, a = this.frame.atmosphere, w = this.weather;
-    lightDirection(a.lightDir, p);
     const night = p.moonMix ?? 0;
-    const key = a.lightDir.join() + p.power + p.rayleigh + p.mie + p.mieG + night;
-    if (key !== this.lastLight) {
-      this.lastLight = key; a.dirty = true;
+    // Light only moves while a preset blends; the scattering is re-integrated then.
+    if (this.lightDirty) {
+      this.lightDirty = false; a.dirty = true;
+      lightDirection(a.lightDir, p);
       a.power = p.power; a.rayleigh = p.rayleigh; a.mie = p.mie; a.mieG = p.mieG;
       transmittance(a.lightColor, a.lightDir, p.rayleigh, p.mie);
       for (let i = 0; i < 3; i++) a.lightColor[i] *= p.power;
@@ -264,6 +265,7 @@ export class World {
       this.presetBlend = reducedMotion ? 1 : Math.min(1, this.presetBlend + dt / 2.6);
       const t = this.presetBlend;
       blendPreset(this.preset, this.presetFrom, this.presetTarget, t * t * (3 - 2 * t));
+      this.lightDirty = true;
       animating = true;
     }
     if (this.updateWeather(reducedMotion ? 1e3 : dt)) animating = true;
@@ -296,8 +298,12 @@ export class World {
     s.windAlign = w.active;
     s.rain = w.rain * w.active;
     s.ripples.fill(0);
-    this.ripples = this.ripples.filter(r => this.time - r.time < 9);
-    this.ripples.forEach((r, i) => s.ripples.set([r.x, r.z, r.time, r.strength], i * 4));
+    // Rings are added in time order, so the expired ones are always first.
+    while (this.ripples.length && this.time - this.ripples[0].time >= 9) this.ripples.shift();
+    for (let i = 0; i < this.ripples.length; i++) {
+      const r = this.ripples[i];
+      s.ripples[i * 4] = r.x; s.ripples[i * 4 + 1] = r.z; s.ripples[i * 4 + 2] = r.time; s.ripples[i * 4 + 3] = r.strength;
+    }
     if (this.ripples.length) animating = true;
 
     const c = f.clouds;

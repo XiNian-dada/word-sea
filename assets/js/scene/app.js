@@ -265,8 +265,8 @@ function start() {
       node.alpha = smoothstep(.3 + node.i * .05, .75 + node.i * .04, harbor.mix);
       node.y = world.waterHeight(node.x, node.z) + 2.6;
       const strength = (1 + node.level * 1.6) * node.alpha;
-      sea.lanterns.set([node.x, node.y, node.z], node.i * 3);
-      sea.lanternColors.set(node.color.map(v => v * strength), node.i * 3);
+      for (let c = 0; c < 3; c++) sea.lanternColors[node.i * 3 + c] = node.color[c] * strength;
+      sea.lanterns[node.i * 3] = node.x; sea.lanterns[node.i * 3 + 1] = node.y; sea.lanterns[node.i * 3 + 2] = node.z;
       if (node.anchor && !compact) {
         world.project(projected, node.x, node.y, node.z);
         const right = node.friend.at[0] > .62;

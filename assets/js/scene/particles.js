@@ -192,10 +192,17 @@ export class Lanterns {
 
   update(nodes) {
     this.count = nodes.length;
-    nodes.forEach((n, i) => this.data.set([n.x, n.y, n.z, n.level, n.color[0], n.color[1], n.color[2], n.alpha], i * 8));
+    // A zero length would upload the whole array in WebGL2; there is nothing to draw anyway.
+    if (!this.count) return;
+    const d = this.data;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i], o = i * 8;
+      d[o] = n.x; d[o + 1] = n.y; d[o + 2] = n.z; d[o + 3] = n.level;
+      d[o + 4] = n.color[0]; d[o + 5] = n.color[1]; d[o + 6] = n.color[2]; d[o + 7] = n.alpha;
+    }
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, d, 0, nodes.length * 8);
   }
 
   draw(frame, renderer) {
