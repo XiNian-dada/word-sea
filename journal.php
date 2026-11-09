@@ -1,5 +1,5 @@
 <?php if (!defined('__TYPECHO_ROOT_DIR__')) exit; $wordSeaLost = wordsea_is_404($this); ?>
-<h2 class="journal-label" id="journal-heading" tabindex="-1"><?php $this->archiveTitle(['category'=>'分类 · %s','tag'=>'标签 · %s','search'=>'搜索 · %s','author'=>'作者 · %s'], '', ''); ?><?php if ($this->is('index')): ?>NOTES FROM THE SHORE · 海边的文字<?php endif; ?><?php if ($wordSeaLost): ?>LOST AT SEA · 404<?php endif; ?></h2>
+<h2 class="journal-label" id="journal-heading" tabindex="-1"><?php if ($wordSeaLost): ?>LOST AT SEA · 404<?php else: $this->archiveTitle(['category'=>'分类 · %s','tag'=>'标签 · %s','search'=>'搜索 · %s','author'=>'作者 · %s'], '', ''); endif; ?><?php if ($this->is('index')): ?>NOTES FROM THE SHORE · 海边的文字<?php endif; ?></h2>
 <div class="journal-scroll">
 <?php if (!$this->is('single') && !$wordSeaLost): ?>
   <?php if ($this->have()): $wordSeaNumber = 0; while ($this->next()): $wordSeaNumber++; ?>
