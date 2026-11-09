@@ -184,6 +184,18 @@ function wordsea_json($value)
     return json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
+function wordsea_lazy_images($html)
+{
+    // The first image may be the first thing a reader sees, so only later ones wait for the scroll.
+    $index = 0;
+    return preg_replace_callback('/<img\b(?![^>]*\bloading=)[^>]*>/i', function ($match) use (&$index) {
+        $tag = $match[0];
+        if ($index++ === 0) return $tag;
+        $attributes = ' loading="lazy"' . (stripos($tag, 'decoding=') === false ? ' decoding="async"' : '');
+        return preg_replace('/^<img\b/i', '<img' . $attributes, $tag);
+    }, $html);
+}
+
 function wordsea_reading_minutes($html)
 {
     // Estimate rendered text once: CJK characters at 300/min, other words at 200/min.
