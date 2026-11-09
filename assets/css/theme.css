@@ -142,9 +142,11 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .story-link svg { width: 16px; opacity: 0; transform: translateX(-8px); transition: opacity .3s, transform .45s var(--ease); color: var(--accent); }
 .story-link:hover .story-title, .story-link:focus-visible .story-title { transform: translateX(6px); color: #fff; }
 .story-link:hover svg, .story-link:focus-visible svg { opacity: 1; transform: none; }
-.story-link.just-read { animation: just-read 2.6s ease-out; }
+.story-link.just-read { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) var(--read-glow), transparent), transparent); animation: just-read 2.6s ease-out; }
 .story-link.just-read .story-number { color: var(--accent); }
-@keyframes just-read { 0%, 20% { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent); } 100% { background: transparent; } }
+/* A registered percentage interpolates, so the gradient fades rather than switching off. */
+@property --read-glow { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+@keyframes just-read { 0%, 20% { --read-glow: 16%; } 100% { --read-glow: 0%; } }
 .empty-note { font: 16px/2 var(--serif); color: var(--ink-soft); }
 .journal-tools { display: grid; gap: 12px; padding-top: 16px; }
 .journal-pagination:empty { display: none; }
