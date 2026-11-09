@@ -12,7 +12,7 @@ function text(value, max) {
   return clean.length > max ? clean.slice(0, max - 1) + '…' : clean;
 }
 function feature(value) {
-  return typeof value === 'string' && !PRIVATE.test(value) ? text(value.replace(/^\s*特征[:：]/, ''), 90) : '';
+  return typeof value === 'string' && !PRIVATE.test(value) ? text(value.replace(/^\s*特征[:：]/, '').replace(/(姓名|年龄|身高|籍贯)[:：]\s*\S+?(?=\s|[，,；;]|$)[\s，,；;]*/g, ''), 90) : '';
 }
 const day = value => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? value.replaceAll('-', '.') : '');
 function photo(value) {
@@ -29,7 +29,7 @@ function photo(value) {
 function record(json) {
   const data = json?.code === 200 && json.success !== false ? json.data : null,
     name = text(data?.name, 40);
-  if (!name) throw new Error('Incomplete record');
+  if (!name || /已找到|已回家|已团圆/.test(name + (data.typeName || ''))) throw new Error('Unusable record');
   const place = typeof data.lostAddress === 'string' ? data.lostAddress.split(/[,，]/) : [];
   return {
     name,
@@ -84,14 +84,19 @@ export default function setup() {
     // Not disabled: that would drop keyboard focus on every 换一位.
     next.setAttribute('aria-disabled', 'true');
     try {
-      const response = await fetch(API, {
-        signal: request.signal,
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer',
-        cache: 'no-store',
-      });
-      if (!response.ok) throw new Error('HTTP ' + response.status);
-      render(box, record(await response.json()));
+      let person = null;
+      // Some records are marked as already found; draw again rather than show them.
+      for (let attempt = 0; !person && attempt < 4; attempt++) {
+        const response = await fetch(API, {
+          signal: request.signal,
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer',
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        try { person = record(await response.json()); } catch { if (attempt === 3) throw new Error('No usable record'); }
+      }
+      render(box, person);
       section.hidden = false;
       next.textContent = '换一位';
     } catch {
