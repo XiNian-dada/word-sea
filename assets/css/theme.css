@@ -22,7 +22,6 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  --dive: 0;
   --harbor: 0;
   --selection: color-mix(in srgb, var(--accent) 38%, transparent);
 }

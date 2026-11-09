@@ -145,18 +145,20 @@ function start() {
   }
 
   // ——— Scene visuals and state ———
+  // Inline styles are written only when they change, so idle frames cost no style work.
   const styles = new WeakMap();
   function style(element, key, value) {
     let previous = styles.get(element);
     if (!previous) styles.set(element, previous = {});
-    if (previous[key] !== value) { element.style[key] = value; previous[key] = value; }
+    if (previous[key] === value) return;
+    previous[key] = value;
+    if (key.startsWith('--')) element.style.setProperty(key, value); else element.style[key] = value;
   }
   function applyVisuals() {
-    const mix = scene.mix;
-    style(articleView, 'opacity', String(smoothstep(.84, 1, mix)));
-    style(friendsView, 'opacity', String(smoothstep(.35, .85, harbor.mix) * (1 - smoothstep(0, .3, mix))));
-    root.style.setProperty('--dive', mix.toFixed(3));
-    root.style.setProperty('--harbor', harbor.mix.toFixed(3));
+    style(articleView, 'opacity', String(smoothstep(.84, 1, scene.mix)));
+    style(friendsView, 'opacity', String(smoothstep(.35, .85, harbor.mix) * (1 - smoothstep(0, .3, scene.mix))));
+    // Only the friends' cards read it; set higher up, it would restyle the article every frame.
+    style(friendsView, '--harbor', harbor.mix.toFixed(3));
   }
   function syncTransition() { document.body.classList.toggle('scene-transition', scene.transitioning || harbor.transitioning); }
   function label() { root.setAttribute('aria-label', LABELS[scene.target ? 'article' : harbor.target ? 'friends' : 'sea']); }
