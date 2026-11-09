@@ -175,7 +175,9 @@ function wordsea_config($archive)
         'density' => max(30, min(100, is_numeric($options->wordSeaDensity) ? (int) $options->wordSeaDensity : 95)),
         'ajax' => (string) $options->wordSeaAjax !== '0',
         'friends' => $scene === 'friends' ? array_slice($all, ($page - 1) * 6, 6) : [], 'friendsCount' => count($all),
-        'friendsPage' => $page, 'friendsPages' => $pages
+        'friendsPage' => $page, 'friendsPages' => $pages,
+        // Loaded on demand by highlight.js, only for articles with code.
+        'prism' => wordsea_asset_url('assets/vendor/prism.js')
     ];
 }
 
