@@ -10,7 +10,7 @@ const SWELLS = [
 ];
 
 const EYE = 6.4;
-export const CRUISE = 64;
+export const CRUISE = 32;
 const LANTERN_HEIGHT = 2.6;
 
 /**
@@ -174,11 +174,11 @@ export class World {
     // The dive: lean towards the water, slip under it, then look into the deep.
     const approach = smoothstep(0, .32, this.dive), submerge = smoothstep(.2, .55, this.dive);
     // Below the surface the eye turns up towards the light it left.
-    cam.pitch = horizonPitch + this.pointer.sy * .012 + approach * .3 - submerge * .85;
+    cam.pitch = horizonPitch + this.pointer.sy * .012 + approach * .12 - submerge * .42;
     cam.yaw = this.pointer.sx * .028;
     cam.eye[0] = this.pointer.sx * 1.1;
     cam.eye[1] = lerp(EYE - this.pointer.sy * .35, 1.6, approach) - submerge * 7.5;
-    cam.eye[2] = -this.cruise - approach * 6;
+    cam.eye[2] = -this.cruise - approach * 2.5;
     cam.underwater = cam.eye[1] < .05;
     mat4.perspective(cam.proj, cam.fovY, aspect, .3, 2400);
     mat4.view(cam.view, cam.eye, cam.pitch, cam.yaw);
@@ -256,8 +256,8 @@ export class World {
     f.time = this.time;
 
     // Pointer parallax eases in; touch never steers the view.
-    this.pointer.sx = damp(this.pointer.sx, this.pointer.x, 2.6, dt);
-    this.pointer.sy = damp(this.pointer.sy, this.pointer.y, 2.6, dt);
+    this.pointer.sx = reducedMotion ? this.pointer.x : damp(this.pointer.sx, this.pointer.x, 2.6, dt);
+    this.pointer.sy = reducedMotion ? this.pointer.y : damp(this.pointer.sy, this.pointer.y, 2.6, dt);
     if (Math.abs(this.pointer.sx - this.pointer.x) > 1e-4 || Math.abs(this.pointer.sy - this.pointer.y) > 1e-4) animating = true;
     else { this.pointer.sx = this.pointer.x; this.pointer.sy = this.pointer.y; }
 
@@ -281,7 +281,7 @@ export class World {
       this.cloudOffset[0] += dt * .0016 * drift;
       this.cloudOffset[1] += dt * .0004;
     }
-    this.clouds = damp(this.clouds, this.cloudsTarget, 3, dt);
+    this.clouds = damp(this.clouds, this.cloudsTarget, 3, reducedMotion ? 1e3 : dt);
     if (Math.abs(this.clouds - this.cloudsTarget) < 1e-3) this.clouds = this.cloudsTarget; else animating = true;
 
     this.updateCamera();
@@ -304,7 +304,8 @@ export class World {
       const r = this.ripples[i];
       s.ripples[i * 4] = r.x; s.ripples[i * 4 + 1] = r.z; s.ripples[i * 4 + 2] = r.time; s.ripples[i * 4 + 3] = r.strength;
     }
-    if (this.ripples.length) animating = true;
+    // Frozen ripples cannot expire until the clock resumes; they need no frames.
+    if (this.ripples.length && !this.paused) animating = true;
 
     const c = f.clouds;
     c.offset[0] = this.cloudOffset[0]; c.offset[1] = this.cloudOffset[1];

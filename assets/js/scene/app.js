@@ -47,17 +47,23 @@ function start() {
 
   const articleView = $('article-view'), articleScroll = $('article-scroll'), friendsView = $('friends-view');
   const homeUi = [...document.querySelectorAll('[data-home-ui]')];
-  const scene = { target: 0, mix: 0, from: 0, started: 0, duration: 3200, transitioning: false, article: null, scroll: 0, scrollTarget: 0, frames: 0 };
-  const harbor = { target: 0, mix: 0, from: 0, started: 0, duration: 3400, transitioning: false, hover: -1, frames: 0 };
+  const scene = { target: 0, mix: 0, from: 0, started: 0, duration: 1200, transitioning: false, article: null, frames: 0 };
+  const harbor = { target: 0, mix: 0, from: 0, started: 0, duration: 1200, transitioning: false, hover: -1, frames: 0 };
   let friends = [], nodes = [];
   const quotes = window.wordSeaCollection?.quotes || [];
 
   // ——— Lettering, built once off the main thread ———
-  buildAtlas('sea', { size: Math.min(2048, renderer.caps.maxTexture), seaWords: SEA_WORDS, cloudWords: CLOUD_WORDS }).then(({ pixels }) => {
-    renderer.setGlyphs(pixels, Math.min(2048, renderer.caps.maxTexture));
-    document.body.classList.add('sea-lettered');
-    invalidate();
-  }).catch(error => console.warn('Sea lettering unavailable:', error));
+  let seaRequested = false;
+  function requestSea() {
+    if (seaRequested) return;
+    seaRequested = true;
+    const size = Math.min(2048, renderer.caps.maxTexture);
+    buildAtlas('sea', { size, seaWords: SEA_WORDS, cloudWords: CLOUD_WORDS }).then(({ pixels }) => {
+      renderer.setGlyphs(pixels, size);
+      document.body.classList.add('sea-lettered');
+      invalidate();
+    }).catch(error => console.warn('Sea lettering unavailable:', error));
+  }
   let quotesRequested = false;
   function requestQuotes() {
     if (quotesRequested || !quotes.length) return;
@@ -74,8 +80,8 @@ function start() {
   const viewport = { width: 1, height: 1 };
   function measure() {
     viewport.width = Math.max(1, root.clientWidth); viewport.height = Math.max(1, root.clientHeight);
-    // Cap the backing store near four megapixels; quality adapts from there.
-    governor.setMax(Math.min(devicePixelRatio || 1, 1.75, Math.sqrt(4.2e6 / (viewport.width * viewport.height))));
+    // Background detail has a bounded pixel budget; DOM text stays at native resolution.
+    governor.setMax(Math.min(devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (viewport.width * viewport.height))));
     world.setViewport(viewport.width, viewport.height);
     renderer.resize(viewport.width, viewport.height, governor.scale);
     layoutLanterns();
@@ -110,14 +116,12 @@ function start() {
     const reading = scene.mix >= 1 && !scene.transitioning;
     // While reading, the sea is hidden: hold its clock and only redraw the walls.
     if (!reading) animating = world.update(dt, { reducedMotion: reducedMotion.matches }) || animating;
-    else {
+    else if (state.immersive && !world.paused && !reducedMotion.matches) {
       const p = world.pointer;
       p.sx = damp(p.sx, p.x, 2.6, dt); p.sy = damp(p.sy, p.y, 2.6, dt);
       if (Math.abs(p.sx - p.x) > 1e-3 || Math.abs(p.sy - p.y) > 1e-3) animating = true;
     }
 
-    scene.scroll = reducedMotion.matches ? scene.scrollTarget : damp(scene.scroll, scene.scrollTarget, 5, dt);
-    if (Math.abs(scene.scroll - scene.scrollTarget) < 1e-4) scene.scroll = scene.scrollTarget; else animating = true;
     if (corridor.updateHighlight(now)) animating = true;
     if (harbor.mix > 0 && updateLanterns(dt)) animating = true;
     updateCorridor();
@@ -136,10 +140,14 @@ function start() {
   function updateCorridor() {
     const s = corridor.state, mix = scene.mix;
     s.reveal = smoothstep(.42, .96, mix);
-    s.descent = (1 - smoothstep(.4, 1, mix)) * 70;
-    s.travel = scene.scroll * 14;
-    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.75, 1, mix)) * smoothstep(.42, .6, mix) : 0;
-    s.look[0] = world.pointer.sx; s.look[1] = world.pointer.sy;
+    // Let the camera settle before text appears. Reading never moves the walls.
+    s.descent = (1 - smoothstep(.38, .88, mix)) * 18;
+    s.travel = 0;
+    s.blur = 0;
+    const quiet = mix >= 1 && !state.immersive;
+    s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
+    // Dim the actual scene uniformly; the reading surface remains transparent.
+    s.exposure = lerp(1.05, .28, state.immersive ? 0 : smoothstep(.42, .96, mix));
     const aspect = viewport.width / viewport.height;
     s.tan[1] = 1 / 1.62; s.tan[0] = aspect / 1.62;
   }
@@ -155,7 +163,7 @@ function start() {
     if (key.startsWith('--')) element.style.setProperty(key, value); else element.style[key] = value;
   }
   function applyVisuals() {
-    style(articleView, 'opacity', String(smoothstep(.84, 1, scene.mix)));
+    style(articleView, 'opacity', String(smoothstep(.88, 1, scene.mix)));
     style(friendsView, 'opacity', String(smoothstep(.35, .85, harbor.mix) * (1 - smoothstep(0, .3, scene.mix))));
     // Only the friends' cards read it; set higher up, it would restyle the article every frame.
     style(friendsView, '--harbor', harbor.mix.toFixed(3));
@@ -184,13 +192,14 @@ function start() {
     if (target) requestQuotes();
     if (state.immersive) setImmersive(false);
     if (target) {
-      articleScroll.scrollTop = 0; scene.scrollTarget = scene.scroll = 0;
+      articleScroll.scrollTop = 0;
+      world.pointer.x = world.pointer.y = 0;
       articleView.hidden = false; articleView.inert = true;
       document.body.classList.add('article-mode'); scene.article = id;
       for (const ui of homeUi) ui.inert = true;
     } else articleView.inert = true;
     scene.from = scene.mix; scene.target = target; scene.started = performance.now();
-    scene.duration = 3200 * Math.max(.3, Math.abs(target - scene.from));
+    scene.duration = 1200 * Math.max(.3, Math.abs(target - scene.from));
     scene.transitioning = animate && !reducedMotion.matches;
     syncTransition(); label();
     if (!scene.transitioning) { scene.mix = target; finishScene(); }
@@ -212,16 +221,20 @@ function start() {
     if (target === harbor.target) return;
     if (state.immersive) setImmersive(false);
     harbor.hover = -1;
-    if (target) { friendsView.hidden = false; friendsView.inert = true; document.body.classList.add('friends-mode'); layoutLanterns(); }
+    if (target) {
+      world.pointer.x = world.pointer.y = 0;
+      friendsView.hidden = false; friendsView.inert = true; document.body.classList.add('friends-mode'); layoutLanterns();
+    }
     else friendsView.inert = true;
     harbor.from = harbor.mix; harbor.target = target; harbor.started = performance.now();
-    harbor.duration = 3400 * Math.max(.3, Math.abs(target - harbor.from));
+    harbor.duration = 1200 * Math.max(.3, Math.abs(target - harbor.from));
     harbor.transitioning = animate && !reducedMotion.matches;
     syncTransition(); label();
     if (!harbor.transitioning) { harbor.mix = target; finishFriends(); }
     invalidate();
   }
   function setScene(id, animate = true) {
+    if (id !== 'article') requestSea();
     if (id === 'friends') { setArticle(null, animate); setFriends(true, animate); }
     else { setFriends(false, animate); setArticle(id, animate); }
   }
@@ -262,7 +275,7 @@ function start() {
     const compact = viewport.width <= 1150 || viewport.height <= 650;
     for (const node of nodes) {
       const target = harbor.hover === node.i ? 1 : 0;
-      node.level = damp(node.level, target, 6, dt);
+      node.level = reducedMotion.matches ? target : damp(node.level, target, 6, dt);
       if (Math.abs(node.level - target) < 1e-3) node.level = target; else settling = true;
       node.alpha = smoothstep(.3 + node.i * .05, .75 + node.i * .04, harbor.mix);
       node.y = world.waterHeight(node.x, node.z) + 2.6;
@@ -270,7 +283,8 @@ function start() {
       for (let c = 0; c < 3; c++) sea.lanternColors[node.i * 3 + c] = node.color[c] * strength;
       sea.lanterns[node.i * 3] = node.x; sea.lanterns[node.i * 3 + 1] = node.y; sea.lanterns[node.i * 3 + 2] = node.z;
       if (node.anchor && !compact) {
-        world.project(projected, node.x, node.y, node.z);
+        // Labels stay anchored while the lanterns themselves ride the waves.
+        world.project(projected, node.x, 2.6, node.z);
         const right = node.friend.at[0] > .62;
         const x = clamp(projected.x + (right ? -248 : 26), 16, viewport.width - 236);
         style(node.anchor, 'transform', `translate3d(${x.toFixed(1)}px,${(projected.y - 30).toFixed(1)}px,0)`);
@@ -346,9 +360,11 @@ function start() {
   }
   function setImmersive(on) {
     state.immersive = on;
+    world.pointer.x = world.pointer.y = world.pointer.sx = world.pointer.sy = 0;
     document.body.classList.toggle('immersive', on);
     if (on) $('restore').focus({ preventScroll: true });
     else $(scene.target ? 'passage-immersive' : harbor.target ? 'friends-immersive' : 'immersive')?.focus({ preventScroll: true });
+    invalidate();
   }
   function setWeather(data) {
     state.observation = data;
@@ -395,12 +411,17 @@ function start() {
     if (event.key.toLowerCase() === 'h' && !event.metaKey && !event.ctrlKey && !event.altKey) setImmersive(!state.immersive);
   });
   addEventListener('pointermove', event => {
-    if (event.pointerType !== 'mouse' || reducedMotion.matches) return;
-    world.pointer.x = (event.clientX / viewport.width - .5) * 2;
-    world.pointer.y = (event.clientY / viewport.height - .5) * 2;
+    if (event.pointerType !== 'mouse' || world.paused || reducedMotion.matches || scene.transitioning || harbor.transitioning) return;
+    if (((scene.target || harbor.target) && !state.immersive) || event.target.closest('dialog[open]')) return;
+    const strength = state.immersive ? 1 : .4;
+    world.pointer.x = (event.clientX / viewport.width - .5) * 2 * strength;
+    world.pointer.y = (event.clientY / viewport.height - .5) * 2 * strength;
     invalidate();
   }, { passive: true });
-  document.documentElement.addEventListener('pointerleave', () => { world.pointer.x = world.pointer.y = 0; invalidate(); });
+  document.documentElement.addEventListener('pointerleave', () => {
+    if (world.paused || (scene.target && !state.immersive)) return;
+    world.pointer.x = world.pointer.y = 0; invalidate();
+  });
 
   // A tap is a short press without travel; scrolling and pinching never count.
   let press = null;
@@ -418,11 +439,6 @@ function start() {
   document.addEventListener('wordsea:quote-picked', event => {
     if (corridor.setPicked(event.detail?.id ?? null, performance.now(), reducedMotion.matches)) invalidate();
   });
-  articleScroll.addEventListener('scroll', () => {
-    scene.scrollTarget = clamp(articleScroll.scrollTop / Math.max(1, articleScroll.scrollHeight - articleScroll.clientHeight), 0, 1);
-    invalidate();
-  }, { passive: true });
-
   reducedMotion.addEventListener('change', () => {
     setPaused(reducedMotion.matches || state.userPaused, true);
     if (reducedMotion.matches) {

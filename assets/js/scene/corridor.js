@@ -21,7 +21,7 @@ export class Corridor {
     this.tile = 1;
     this.ready = false;
     this.highlight = { target: 0, weights: new Float32Array(256), from: new Float32Array(256), started: 0, active: false, strength: 0 };
-    this.state = { reveal: 0, travel: 0, descent: 0, blur: 0, look: new Float32Array(2), tan: new Float32Array(2), glow: new Float32Array([.95, .74, .46]) };
+    this.state = { reveal: 0, travel: 0, descent: 0, blur: 0, exposure: 1.05, look: new Float32Array(2), tan: new Float32Array(2), glow: new Float32Array([.95, .74, .46]) };
   }
 
   setAtlas({ pixels, columns, size }) {
@@ -94,7 +94,7 @@ export class Corridor {
     const gl = this.gl, p = this.program.use();
     p.set('uTan', s.tan).set('uLook', s.look).set('uTravel', s.travel).set('uDescent', s.descent)
       .set('uReveal', s.reveal).set('uPickedStrength', this.highlight.strength).set('uTime', frame.time)
-      .set('uExposure', 1.05).set('uBlur', s.blur).set('uGlow', s.glow).set('uTile', this.tile)
+      .set('uExposure', s.exposure).set('uBlur', s.blur).set('uGlow', s.glow).set('uTile', this.tile)
       .texture('uQuotes', this.quotes).texture('uQuoteIds', this.ids).texture('uPicked', this.picked);
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
