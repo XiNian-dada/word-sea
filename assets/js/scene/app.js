@@ -47,8 +47,8 @@ function start() {
 
   const articleView = $('article-view'), articleScroll = $('article-scroll'), friendsView = $('friends-view');
   const homeUi = [...document.querySelectorAll('[data-home-ui]')];
-  const scene = { target: 0, mix: 0, from: 0, started: 0, duration: 1200, transitioning: false, article: null, frames: 0 };
-  const harbor = { target: 0, mix: 0, from: 0, started: 0, duration: 1200, transitioning: false, hover: -1, frames: 0 };
+  const scene = { target: 0, mix: 0, from: 0, started: 0, duration: 3200, transitioning: false, article: null, scroll: 0, scrollTarget: 0, frames: 0 };
+  const harbor = { target: 0, mix: 0, from: 0, started: 0, duration: 3400, transitioning: false, hover: -1, frames: 0 };
   let friends = [], nodes = [];
   const quotes = window.wordSeaCollection?.quotes || [];
 
@@ -122,6 +122,8 @@ function start() {
       if (Math.abs(p.sx - p.x) > 1e-3 || Math.abs(p.sy - p.y) > 1e-3) animating = true;
     }
 
+    scene.scroll = reducedMotion.matches ? scene.scrollTarget : damp(scene.scroll, scene.scrollTarget, 5, dt);
+    if (Math.abs(scene.scroll - scene.scrollTarget) < 1e-4) scene.scroll = scene.scrollTarget; else animating = true;
     if (corridor.updateHighlight(now)) animating = true;
     if (harbor.mix > 0 && updateLanterns(dt)) animating = true;
     updateCorridor();
@@ -140,10 +142,9 @@ function start() {
   function updateCorridor() {
     const s = corridor.state, mix = scene.mix;
     s.reveal = smoothstep(.42, .96, mix);
-    // Let the camera settle before text appears. Reading never moves the walls.
-    s.descent = (1 - smoothstep(.38, .88, mix)) * 18;
-    s.travel = 0;
-    s.blur = 0;
+    s.descent = (1 - smoothstep(.4, 1, mix)) * 70;
+    s.travel = scene.scroll * 14;
+    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.75, 1, mix)) * smoothstep(.42, .6, mix) : 0;
     const quiet = mix >= 1 && !state.immersive;
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
     // Dim the actual scene uniformly; the reading surface remains transparent.
@@ -163,7 +164,7 @@ function start() {
     if (key.startsWith('--')) element.style.setProperty(key, value); else element.style[key] = value;
   }
   function applyVisuals() {
-    style(articleView, 'opacity', String(smoothstep(.88, 1, scene.mix)));
+    style(articleView, 'opacity', String(smoothstep(.84, 1, scene.mix)));
     style(friendsView, 'opacity', String(smoothstep(.35, .85, harbor.mix) * (1 - smoothstep(0, .3, scene.mix))));
     // Only the friends' cards read it; set higher up, it would restyle the article every frame.
     style(friendsView, '--harbor', harbor.mix.toFixed(3));
@@ -192,14 +193,14 @@ function start() {
     if (target) requestQuotes();
     if (state.immersive) setImmersive(false);
     if (target) {
-      articleScroll.scrollTop = 0;
+      articleScroll.scrollTop = 0; scene.scrollTarget = scene.scroll = 0;
       world.pointer.x = world.pointer.y = 0;
       articleView.hidden = false; articleView.inert = true;
       document.body.classList.add('article-mode'); scene.article = id;
       for (const ui of homeUi) ui.inert = true;
     } else articleView.inert = true;
     scene.from = scene.mix; scene.target = target; scene.started = performance.now();
-    scene.duration = 1200 * Math.max(.3, Math.abs(target - scene.from));
+    scene.duration = 3200 * Math.max(.3, Math.abs(target - scene.from));
     scene.transitioning = animate && !reducedMotion.matches;
     syncTransition(); label();
     if (!scene.transitioning) { scene.mix = target; finishScene(); }
@@ -227,7 +228,7 @@ function start() {
     }
     else friendsView.inert = true;
     harbor.from = harbor.mix; harbor.target = target; harbor.started = performance.now();
-    harbor.duration = 1200 * Math.max(.3, Math.abs(target - harbor.from));
+    harbor.duration = 3400 * Math.max(.3, Math.abs(target - harbor.from));
     harbor.transitioning = animate && !reducedMotion.matches;
     syncTransition(); label();
     if (!harbor.transitioning) { harbor.mix = target; finishFriends(); }
@@ -425,11 +426,20 @@ function start() {
 
   // A tap is a short press without travel; scrolling and pinching never count.
   let press = null;
-  canvas.addEventListener('pointerdown', event => { press = event.isPrimary && event.button === 0 ? { x: event.clientX, y: event.clientY, id: event.pointerId, time: performance.now() } : null; });
-  canvas.addEventListener('pointercancel', () => { press = null; });
-  canvas.addEventListener('pointerup', event => {
+  // The full-width transparent scrollport covers the walls in reading mode.
+  // Its empty margins can pick a quote; article text and controls keep their input.
+  const wallTarget = target => target === canvas || (scene.target && target === articleScroll);
+  root.addEventListener('pointerdown', event => {
+    press = event.isPrimary && event.button === 0 && wallTarget(event.target) && !scene.transitioning && !harbor.transitioning
+      ? { x: event.clientX, y: event.clientY, id: event.pointerId, time: performance.now() } : null;
+  });
+  root.addEventListener('pointermove', event => {
+    if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) press = null;
+  }, { passive: true });
+  root.addEventListener('pointercancel', () => { press = null; });
+  root.addEventListener('pointerup', event => {
     const down = press; press = null;
-    if (!down || down.id !== event.pointerId || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 8 || performance.now() - down.time > 700) return;
+    if (!down || !wallTarget(event.target) || down.id !== event.pointerId || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 8 || performance.now() - down.time > 700) return;
     if (scene.transitioning || harbor.transitioning) return;
     if (scene.target) {
       const id = corridor.pick(event.clientX, event.clientY, viewport.width, viewport.height);
@@ -439,6 +449,11 @@ function start() {
   document.addEventListener('wordsea:quote-picked', event => {
     if (corridor.setPicked(event.detail?.id ?? null, performance.now(), reducedMotion.matches)) invalidate();
   });
+  articleScroll.addEventListener('scroll', () => {
+    press = null;
+    scene.scrollTarget = clamp(articleScroll.scrollTop / Math.max(1, articleScroll.scrollHeight - articleScroll.clientHeight), 0, 1);
+    invalidate();
+  }, { passive: true });
   reducedMotion.addEventListener('change', () => {
     setPaused(reducedMotion.matches || state.userPaused, true);
     if (reducedMotion.matches) {

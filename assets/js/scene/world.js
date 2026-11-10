@@ -10,7 +10,7 @@ const SWELLS = [
 ];
 
 const EYE = 6.4;
-export const CRUISE = 32;
+export const CRUISE = 64;
 const LANTERN_HEIGHT = 2.6;
 
 /**
@@ -174,11 +174,11 @@ export class World {
     // The dive: lean towards the water, slip under it, then look into the deep.
     const approach = smoothstep(0, .32, this.dive), submerge = smoothstep(.2, .55, this.dive);
     // Below the surface the eye turns up towards the light it left.
-    cam.pitch = horizonPitch + this.pointer.sy * .012 + approach * .12 - submerge * .42;
+    cam.pitch = horizonPitch + this.pointer.sy * .012 + approach * .3 - submerge * .85;
     cam.yaw = this.pointer.sx * .028;
     cam.eye[0] = this.pointer.sx * 1.1;
     cam.eye[1] = lerp(EYE - this.pointer.sy * .35, 1.6, approach) - submerge * 7.5;
-    cam.eye[2] = -this.cruise - approach * 2.5;
+    cam.eye[2] = -this.cruise - approach * 6;
     cam.underwater = cam.eye[1] < .05;
     mat4.perspective(cam.proj, cam.fovY, aspect, .3, 2400);
     mat4.view(cam.view, cam.eye, cam.pitch, cam.yaw);
