@@ -315,7 +315,7 @@ dialog { color: var(--ink); }
 /* A stationary wash follows the reading view's fade, leaving the walls visible. */
 .article-view::before {
   content: ''; position: absolute; z-index: -1; pointer-events: none;
-  inset: calc(var(--safe-top) + 70px) max(0px, calc((100% - var(--reading)) / 2 - 88px)) calc(var(--safe-bottom) + 14px);
+  inset: calc(var(--safe-top) + 70px) max(0px, calc((100% - var(--reading)) / 2 - 124px)) calc(var(--safe-bottom) + 14px);
   background: linear-gradient(155deg, rgb(7 14 23 / .4), rgb(5 11 19 / .56) 56%, rgb(8 16 25 / .44));
   mask-image:
     linear-gradient(90deg, transparent, #000 var(--reading-feather, 72px), #000 calc(100% - var(--reading-feather, 72px)), transparent),
@@ -417,11 +417,14 @@ dialog { color: var(--ink); }
 .author-name { font-size: 13px; letter-spacing: .18em; color: #d0d8df; }
 .article-text .author-signature p { margin: 2px 0 0; font-size: 11.5px; letter-spacing: .12em; color: #7f8b98; }
 .post-near { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0 0 30px; text-align: left; }
-.post-near > div { min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: rgb(255 255 255 / .025); transition: border-color .25s, background .25s; }
-.post-near > div:hover { border-color: var(--line-strong); background: rgb(255 255 255 / .05); }
+.post-near > div { position: relative; min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: rgb(255 255 255 / .025); transition: border-color .25s, background .25s; }
+.post-near > div:has(a[href]):is(:hover, :focus-within) { border-color: var(--line-strong); background: rgb(255 255 255 / .05); }
 .post-near > div:last-child { text-align: right; }
 .reading-near-label { display: block; margin-bottom: 6px; font: 11px/1.4 var(--mono); letter-spacing: .1em; color: #7f8b98; }
 .post-near a { display: block; font: 15px/1.7 var(--serif); text-decoration: none; color: #d6dde4; }
+.post-near a::after { content: ''; position: absolute; inset: 0; border-radius: 14px; }
+.post-near a:focus-visible { outline: 0; }
+.post-near a:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 3px; }
 .post-near a:hover { color: #fff; }
 .reading-return { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 22px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; font-size: 13px; letter-spacing: .14em; color: var(--ink-soft); transition: border-color .2s, color .2s, box-shadow .3s; }
 .reading-return:hover { border-color: var(--accent); color: var(--ink); box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 25%, transparent); }
