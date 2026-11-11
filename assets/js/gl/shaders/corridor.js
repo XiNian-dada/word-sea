@@ -10,7 +10,10 @@ uniform sampler2D uQuotes;
 uniform sampler2D uQuoteIds;
 uniform sampler2D uPicked;
 uniform vec2 uTan;           // tan of half field of view (x, y)
-uniform vec2 uLook;          // pointer parallax
+uniform vec2 uAngles;        // pitch and yaw of the shared camera transition
+uniform float uEyeX;
+uniform float uOffsetY;
+uniform vec2 uLightNdc;
 uniform float uTravel;
 uniform float uDescent;
 uniform float uReveal;       // 0 … 1, opacity and how many quotes are written
@@ -48,13 +51,13 @@ vec3 tonemap(vec3 c) {
 }
 
 void main() {
-  vec3 dir = normalize(vec3(vNdc.x * uTan.x, (vNdc.y - .1) * uTan.y, -1.0));
-  float pitch = .12 + uLook.y * .02, cp = cos(pitch), sp = sin(pitch);
+  vec3 dir = normalize(vec3(vNdc.x * uTan.x, (vNdc.y - uOffsetY) * uTan.y, -1.0));
+  float pitch = uAngles.x, cp = cos(pitch), sp = sin(pitch);
   dir.yz = mat2(cp, sp, -sp, cp) * dir.yz;
-  float yaw = uLook.x * .035, cy = cos(yaw), sy = sin(yaw);
+  float yaw = uAngles.y, cy = cos(yaw), sy = sin(yaw);
   dir.xz = mat2(cy, -sy, sy, cy) * dir.xz;
   float side = step(0.0, dir.x);
-  vec3 eye = vec3(uLook.x * .25, uDescent, -uTravel);
+  vec3 eye = vec3(uEyeX, uDescent, -uTravel);
   float t = ((side * 2.0 - 1.0) * WALL - eye.x) / dir.x;
   vec3 hit = eye + dir * t;
   vec2 uv = wallUv(hit, side);
@@ -90,11 +93,11 @@ void main() {
 
   // Mist thickens with distance and takes the colour of the far light.
   float fog = 1.0 - exp(-pow(distance / 30.0, 1.2));
-  vec3 mist = mix(vec3(.045, .06, .08), uGlow * .2, smoothstep(.3, 1.0, fog) * exp(-abs(vNdc.y - .27) * 1.6)) * (1.05 - vNdc.y * .15);
+  vec3 mist = mix(vec3(.045, .06, .08), uGlow * .2, smoothstep(.3, 1.0, fog) * exp(-abs(vNdc.y - uLightNdc.y) * 1.6)) * (1.05 - vNdc.y * .15);
   color = mix(color, mist, fog * smoothstep(.3, .95, uReveal));
 
   // The light itself: a small source and a long soft shaft down the corridor.
-  vec2 lp = vec2(vNdc.x * uTan.x / uTan.y, vNdc.y - .27 + uLook.y * .02);
+  vec2 lp = vec2((vNdc.x - uLightNdc.x) * uTan.x / uTan.y, vNdc.y - uLightNdc.y);
   float r = length(lp);
   color += uGlow * (exp(-r * r / .00035) * 1.6 + exp(-r * r / .004) * .25 + exp(-r * r / .05) * .06) * smoothstep(.6, .98, uReveal);
   float shaft = exp(-abs(lp.x) * 14.0) * smoothstep(.3, -.6, lp.y) * .008;

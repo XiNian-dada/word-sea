@@ -151,8 +151,7 @@ function start() {
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
     // Ease the corridor light down as its lettering emerges.
     s.exposure = lerp(1.05, .28, state.immersive ? 0 : s.reveal);
-    const aspect = viewport.width / viewport.height;
-    s.tan[1] = 1 / 1.62; s.tan[0] = aspect / 1.62;
+    corridor.updateCamera(world.frame.camera, mix, viewport.width / viewport.height);
   }
 
   // ——— Scene visuals and state ———

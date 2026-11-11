@@ -1,9 +1,11 @@
 import { Program, createTexture } from '../gl/context.js';
 import { FULLSCREEN_VERTEX } from '../gl/shaders/sky.js';
 import { CORRIDOR_FRAGMENT } from '../gl/shaders/corridor.js';
-import { clamp, lerp } from '../core/math.js';
+import { clamp, lerp, smoothstep } from '../core/math.js';
 
 const WALL = 4.2;
+const READING_TAN = 1 / 1.62;
+const LIGHT_ELEVATION = .12 + Math.atan(.17 * READING_TAN);
 
 /** The quotation corridor, drawn over the sea while diving and alone while reading. */
 export class Corridor {
@@ -21,7 +23,29 @@ export class Corridor {
     this.tile = 1;
     this.ready = false;
     this.highlight = { target: 0, weights: new Float32Array(256), from: new Float32Array(256), started: 0, active: false, strength: 0 };
-    this.state = { reveal: 0, travel: 0, descent: 0, blur: 0, exposure: 1.05, look: new Float32Array(2), tan: new Float32Array(2), glow: new Float32Array([.95, .74, .46]) };
+    this.state = { reveal: 0, travel: 0, descent: 0, blur: 0, exposure: 1.05, look: new Float32Array(2), tan: new Float32Array(2), angles: new Float32Array([.12, 0]), eyeX: 0, offsetY: .1, lightNdc: new Float32Array([0, .27]), glow: new Float32Array([.95, .74, .46]) };
+  }
+
+  updateCamera(camera, progress, aspect) {
+    const s = this.state;
+    // Match the sea's rays while both scenes are visible. Once the corridor
+    // is opaque, ease towards its reading composition along the same timeline.
+    const settle = smoothstep(.64, 1, progress);
+    // The analytic corridor ray uses the opposite rotation signs to mat4.view.
+    s.angles[0] = lerp(-camera.pitch, .12 + s.look[1] * .02, settle);
+    s.angles[1] = lerp(-camera.yaw, s.look[0] * .035, settle);
+    s.eyeX = lerp(camera.eye[0], s.look[0] * .25, settle);
+    s.offsetY = lerp(0, .1, settle);
+    s.tan[1] = lerp(camera.tanHalfY, READING_TAN, settle);
+    s.tan[0] = s.tan[1] * aspect;
+
+    // Project a fixed light direction so the light follows the turning view.
+    const cp = Math.cos(s.angles[0]), sp = Math.sin(s.angles[0]);
+    const cy = Math.cos(s.angles[1]), sy = Math.sin(s.angles[1]);
+    const ly = Math.sin(LIGHT_ELEVATION), lz = -Math.cos(LIGHT_ELEVATION) * cy;
+    const depth = sp * ly - cp * lz;
+    s.lightNdc[0] = Math.cos(LIGHT_ELEVATION) * sy / depth / s.tan[0];
+    s.lightNdc[1] = (cp * ly + sp * lz) / depth / s.tan[1] + s.offsetY;
   }
 
   setAtlas({ pixels, columns, size }) {
@@ -70,13 +94,13 @@ export class Corridor {
     const s = this.state;
     if (!this.ready || s.reveal < .99) return null;
     const nx = clientX / width * 2 - 1, ny = 1 - clientY / height * 2;
-    let dx = nx * s.tan[0], dy = (ny - .1) * s.tan[1], dz = -1;
+    let dx = nx * s.tan[0], dy = (ny - s.offsetY) * s.tan[1], dz = -1;
     const length = Math.hypot(dx, dy, dz); dx /= length; dy /= length; dz /= length;
-    const pitch = .12 + s.look[1] * .02, cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const pitch = s.angles[0], cp = Math.cos(pitch), sp = Math.sin(pitch);
     [dy, dz] = [cp * dy - sp * dz, sp * dy + cp * dz];
-    const yaw = s.look[0] * .035, cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const yaw = s.angles[1], cy = Math.cos(yaw), sy = Math.sin(yaw);
     [dx, dz] = [cy * dx + sy * dz, -sy * dx + cy * dz];
-    const side = dx >= 0 ? 1 : 0, ex = s.look[0] * .25, ey = s.descent, ez = -s.travel;
+    const side = dx >= 0 ? 1 : 0, ex = s.eyeX, ey = s.descent, ez = -s.travel;
     const t = ((side * 2 - 1) * WALL - ex) / dx;
     if (!(t > 0) || t > 90) return null;
     const hz = ez + dz * t, hy = ey + dy * t;
@@ -92,7 +116,8 @@ export class Corridor {
     const s = this.state;
     if (s.reveal <= .001 || !this.ready) return;
     const gl = this.gl, p = this.program.use();
-    p.set('uTan', s.tan).set('uLook', s.look).set('uTravel', s.travel).set('uDescent', s.descent)
+    p.set('uTan', s.tan).set('uAngles', s.angles).set('uEyeX', s.eyeX).set('uOffsetY', s.offsetY).set('uLightNdc', s.lightNdc)
+      .set('uTravel', s.travel).set('uDescent', s.descent)
       .set('uReveal', s.reveal).set('uPickedStrength', this.highlight.strength).set('uTime', frame.time)
       .set('uExposure', s.exposure).set('uBlur', s.blur).set('uGlow', s.glow).set('uTile', this.tile)
       .texture('uQuotes', this.quotes).texture('uQuoteIds', this.ids).texture('uPicked', this.picked);
