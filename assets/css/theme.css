@@ -312,6 +312,16 @@ dialog { color: var(--ink); }
 
 /* ——— The corridor and the article ——— */
 .article-view { position: absolute; inset: 0; z-index: 2; opacity: 0; pointer-events: none; --reading: min(700px, 100%); }
+/* A stationary wash follows the reading view's fade, leaving the walls visible. */
+.article-view::before {
+  content: ''; position: absolute; z-index: -1; pointer-events: none;
+  inset: calc(var(--safe-top) + 70px) max(0px, calc((100% - var(--reading)) / 2 - 88px)) calc(var(--safe-bottom) + 14px);
+  background: linear-gradient(155deg, rgb(7 14 23 / .4), rgb(5 11 19 / .56) 56%, rgb(8 16 25 / .44));
+  mask-image:
+    linear-gradient(90deg, transparent, #000 var(--reading-feather, 72px), #000 calc(100% - var(--reading-feather, 72px)), transparent),
+    linear-gradient(180deg, transparent, #000 48px, #000 calc(100% - 48px), transparent);
+  mask-composite: intersect;
+}
 .article-view > * { pointer-events: auto; }
 .article-scroll {
   position: absolute; inset: calc(var(--safe-top) + 92px) 0 calc(var(--safe-bottom) + 34px); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; outline: none;
@@ -610,7 +620,8 @@ body:not(.effects-ready) .friend-link { position: relative; width: auto; opacity
   .pill-link { height: 44px; padding: 0 14px 0 12px; font-size: 12.5px; letter-spacing: .04em; }
   .pick-entry { height: 44px; padding: 0 14px; letter-spacing: .06em; }
   .passage-tools .dock-icon { width: 44px; height: 44px; }
-  .article-view { --reading: 100%; }
+  .article-view { --reading: 100%; --reading-feather: 22px; }
+  .article-view::before { top: calc(var(--safe-top) + 58px); bottom: 0; }
   .article-scroll { inset: calc(var(--safe-top) + 74px) 0 0; padding: 20px max(22px, var(--safe-right)) 80px max(22px, var(--safe-left)); }
   .article-text { font-size: 17px; line-height: 1.9; }
   .article-text h1 { font-size: 28px; letter-spacing: .05em; }
