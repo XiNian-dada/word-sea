@@ -59,7 +59,8 @@ void main() {
   vec3 hit = eye + dir * t;
   vec2 uv = wallUv(hit, side);
 
-  float packing = smoothstep(.0, .96, uReveal);
+  // Keep the first quotations sparse, then fill the walls as the dive deepens.
+  float packing = uReveal * uReveal;
   float ink = carve(uv, packing);
   if (uBlur > 0.0) ink = ink * .5 + (carve(uv + vec2(0.0, uBlur), packing) + carve(uv - vec2(0.0, uBlur), packing)) * .25;
 

@@ -141,13 +141,12 @@ function start() {
 
   function updateCorridor() {
     const s = corridor.state, mix = scene.mix;
-    // Start the submerged lettering before crossing the surface so there is
-    // always a moving depth cue through the darker waterline.
-    // Both views share the same eased progress so there is no second takeoff.
-    s.reveal = smoothstep(.08, .78, mix);
+    // Leave room to pass below the water before the walls gradually emerge.
+    // Their descent still shares the camera's progress throughout the handoff.
+    s.reveal = smoothstep(.36, .98, mix);
     s.descent = (1 - mix) * 70;
     s.travel = scene.scroll * 14;
-    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.7, 1, mix)) * smoothstep(.08, .4, mix) : 0;
+    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.75, 1, mix)) * smoothstep(.36, .6, mix) : 0;
     const quiet = mix >= 1 && !state.immersive;
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
     // Ease the corridor light down as its lettering emerges.
