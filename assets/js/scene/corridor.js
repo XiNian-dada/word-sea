@@ -26,6 +26,18 @@ export class Corridor {
     this.state = { reveal: 0, travel: 0, descent: 0, blur: 0, exposure: 1.05, look: new Float32Array(2), tan: new Float32Array(2), angles: new Float32Array([.12, 0]), eyeX: 0, offsetY: .1, lightNdc: new Float32Array([0, .27]), glow: new Float32Array([.95, .74, .46]) };
   }
 
+  updateLighting(preset, exposure) {
+    // The same sun elevation and continuous moon blend drive both scenes.
+    const noon = smoothstep(-2, 34, preset.elevation), moon = preset.moonMix;
+    const strength = lerp(lerp(.6, 1.4, noon), .12, moon);
+    const glow = this.state.glow;
+    glow[0] = lerp(lerp(.95, .82, noon), .4, moon) * strength;
+    glow[1] = lerp(lerp(.74, .92, noon), .6, moon) * strength;
+    glow[2] = lerp(lerp(.46, 1, noon), 1, moon) * strength;
+    // Retain enough ambient light to read the carvings on moonlit walls.
+    this.state.exposure = exposure * lerp(.68, 1.08, strength / 1.4);
+  }
+
   updateCamera(camera, progress, aspect) {
     const s = this.state;
     // Match the sea's rays while both scenes are visible. Once the corridor

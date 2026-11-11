@@ -1,7 +1,7 @@
 
 // The reading corridor: two infinite walls of quotations, traced analytically
-// per pixel. Letters are carved into the stone, so they catch the warm light
-// that waits at the far end of the corridor.
+// per pixel. Letters are carved into the stone, so they catch the daylight
+// or moonlight filtering through the far end of the corridor.
 
 export const CORRIDOR_FRAGMENT = /* glsl */`
 in vec2 vNdc;

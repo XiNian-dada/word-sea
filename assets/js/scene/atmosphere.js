@@ -98,7 +98,7 @@ export function blendPreset(out, a, b, t) {
   for (const key of VECTORS) { out[key] ||= [0, 0, 0]; for (let i = 0; i < 3; i++) out[key][i] = lerp(a[key][i], b[key][i], t); }
   // The moon replaces the sun halfway through a day ↔ night change.
   out.light = t < .5 ? a.light : b.light;
-  out.moonMix = lerp(a.light === 'moon' ? 1 : 0, b.light === 'moon' ? 1 : 0, t);
+  out.moonMix = lerp(a.moonMix ?? (a.light === 'moon' ? 1 : 0), b.moonMix ?? (b.light === 'moon' ? 1 : 0), t);
   return out;
 }
 

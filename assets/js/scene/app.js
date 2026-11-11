@@ -116,10 +116,14 @@ function start() {
     const reading = scene.mix >= 1 && !scene.transitioning;
     // While reading, the sea is hidden: hold its clock and only redraw the walls.
     if (!reading) animating = world.update(dt, { reducedMotion: reducedMotion.matches }) || animating;
-    else if (state.immersive && !world.paused && !reducedMotion.matches) {
-      const p = world.pointer;
-      p.sx = damp(p.sx, p.x, 2.6, dt); p.sy = damp(p.sy, p.y, 2.6, dt);
-      if (Math.abs(p.sx - p.x) > 1e-3 || Math.abs(p.sy - p.y) > 1e-3) animating = true;
+    else {
+      animating = world.updateTheme(dt, { reducedMotion: reducedMotion.matches }) || animating;
+      world.updateAtmosphere();
+      if (state.immersive && !world.paused && !reducedMotion.matches) {
+        const p = world.pointer;
+        p.sx = damp(p.sx, p.x, 2.6, dt); p.sy = damp(p.sy, p.y, 2.6, dt);
+        if (Math.abs(p.sx - p.x) > 1e-3 || Math.abs(p.sy - p.y) > 1e-3) animating = true;
+      }
     }
 
     scene.scroll = reducedMotion.matches ? scene.scrollTarget : damp(scene.scroll, scene.scrollTarget, 5, dt);
@@ -150,7 +154,7 @@ function start() {
     const quiet = mix >= 1 && !state.immersive;
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
     // Ease the corridor light down as its lettering emerges.
-    s.exposure = lerp(1.05, .28, state.immersive ? 0 : s.reveal);
+    corridor.updateLighting(world.preset, lerp(1.05, .28, state.immersive ? 0 : s.reveal));
     corridor.updateCamera(world.frame.camera, mix, viewport.width / viewport.height);
   }
 

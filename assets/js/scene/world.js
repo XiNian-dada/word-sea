@@ -94,6 +94,16 @@ export class World {
     this.lightDirty = true;
   }
 
+  /** Advance the shared daylight even when reading holds the sea clock still. */
+  updateTheme(dt, { reducedMotion = false } = {}) {
+    if (this.presetBlend >= 1) return false;
+    this.presetBlend = reducedMotion ? 1 : Math.min(1, this.presetBlend + dt / 2.6);
+    const t = this.presetBlend;
+    blendPreset(this.preset, this.presetFrom, this.presetTarget, t * t * (3 - 2 * t));
+    this.lightDirty = true;
+    return this.presetBlend < 1;
+  }
+
   /** Height of the swell (without ripples) at a world point. */
   waterHeight(x, z) {
     const amplitude = this.frame.sea.amplitude, w = this.weather;
@@ -261,13 +271,7 @@ export class World {
     if (Math.abs(this.pointer.sx - this.pointer.x) > 1e-4 || Math.abs(this.pointer.sy - this.pointer.y) > 1e-4) animating = true;
     else { this.pointer.sx = this.pointer.x; this.pointer.sy = this.pointer.y; }
 
-    if (this.presetBlend < 1) {
-      this.presetBlend = reducedMotion ? 1 : Math.min(1, this.presetBlend + dt / 2.6);
-      const t = this.presetBlend;
-      blendPreset(this.preset, this.presetFrom, this.presetTarget, t * t * (3 - 2 * t));
-      this.lightDirty = true;
-      animating = true;
-    }
+    if (this.updateTheme(dt, { reducedMotion })) animating = true;
     if (this.updateWeather(reducedMotion ? 1e3 : dt)) animating = true;
 
     const previousWind = this.waveWind;

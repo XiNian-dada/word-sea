@@ -59,6 +59,42 @@ test('reduced motion settles existing pointer parallax without further frames', 
   assert.equal(world.pointer.sy, 0);
 });
 
+test('daylight can finish changing while reading holds the sea clock still', () => {
+  const world = new World({ theme: 'noon' });
+  world.update(.5);
+  world.addRipple(2, -8, 1);
+  const time = world.time, waveTime = world.waveTime, offset = [...world.cloudOffset];
+  world.setTheme('night');
+  for (let i = 0; i < 180; i++) {
+    world.updateTheme(1 / 60);
+    world.updateAtmosphere();
+  }
+  assert.equal(world.presetBlend, 1);
+  assert.equal(world.preset.moonMix, 1);
+  assert.equal(world.frame.atmosphere.moon, 1);
+  assert.equal(world.updateTheme(1 / 60), false, 'settled lighting must not schedule more frames');
+  assert.equal(world.time, time);
+  assert.equal(world.frame.time, time);
+  assert.equal(world.waveTime, waveTime);
+  assert.deepEqual(world.cloudOffset, offset);
+  assert.equal(world.ripples.length, 1);
+});
+
+test('reversing a daylight change keeps its current moon blend and honors reduced motion', () => {
+  const world = new World({ theme: 'noon' });
+  world.setTheme('night');
+  world.updateTheme(.9);
+  const moon = world.preset.moonMix, elevation = world.preset.elevation;
+  assert.ok(moon > 0 && moon < 1);
+  world.setTheme('noon');
+  world.updateTheme(0);
+  assert.equal(world.preset.moonMix, moon, 'reversal must start from the visible lighting');
+  assert.equal(world.preset.elevation, elevation);
+  assert.equal(world.updateTheme(0, { reducedMotion: true }), false);
+  assert.equal(world.presetBlend, 1);
+  assert.equal(world.preset.moonMix, 0);
+});
+
 test('diving keeps looking into the water and moving until the corridor takes over', () => {
   for (const [width, height] of [[1440, 900], [390, 844]]) {
     const world = new World();
