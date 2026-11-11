@@ -166,6 +166,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 .site-search input::placeholder { color: var(--ink-faint); }
 .site-search button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: none; color: var(--ink-soft); font-size: 16px; }
 .is-loading .journal { opacity: .6; }
+/* The sea keeps moving while the 404 and shore text exchange places. */
+.journal-changing .journal, .journal-changing .hero { opacity: 0; pointer-events: none; }
 
 /* ——— Not found: the way home, and one family's search ——— */
 /* Follow the journal content so AJAX navigation restores the home layout too. */

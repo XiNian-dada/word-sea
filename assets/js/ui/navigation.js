@@ -8,7 +8,9 @@ export default function setup() {
   let lastSeaScroll = 0,
     displayedUrl = location.href;
   const root = document.getElementById('wordsea-scene'),
-    articleScroll = document.getElementById('article-scroll');
+    articleScroll = document.getElementById('article-scroll'),
+    journal = document.getElementById('journal'),
+    hero = document.querySelector('.hero');
   const status = document.getElementById('site-status');
   const cleanUrl = value => {
     const url = new URL(value, location.href);
@@ -140,6 +142,15 @@ export default function setup() {
       if (!['sea', 'article', 'friends'].includes(next.scene)) throw new Error('Unknown scene');
       const previousScene = config.scene,
         previousUrl = displayedUrl;
+      const changingJournal = previousScene === 'sea' && next.scene === 'sea'
+        && (journal.querySelector('.lost-line') || doc.querySelector('#journal .lost-line'));
+      if (changingJournal) {
+        // Hide the outgoing layout before moving between the centre and shore.
+        // CSS supplies the timing, including the reduced-motion preference.
+        document.body.classList.add('journal-changing');
+        await Promise.allSettled([journal, hero].flatMap(node => node.getAnimations().map(animation => animation.finished)));
+        if (sequence !== navigation) return;
+      }
       if (previousScene === 'sea') lastSeaScroll = document.querySelector('.journal-scroll')?.scrollTop || 0;
       if (push) {
         rememberScroll();
@@ -169,7 +180,9 @@ export default function setup() {
       window.wordSea.setScene(next.scene, true);
       if (window.wordSea.getState().scene !== next.scene) throw new Error('Scene unavailable');
       if (next.scene === 'article') articleScroll.scrollTop = restore?.scroll || 0;
-      document.body.classList.remove('is-loading');
+      // A hero revealed by the new markup must first acquire the hidden style.
+      if (changingJournal) getComputedStyle(hero).opacity;
+      document.body.classList.remove('is-loading', 'journal-changing');
       root.removeAttribute('aria-busy');
       await settled(sequence);
       if (sequence !== navigation) return;
@@ -210,7 +223,7 @@ export default function setup() {
       if (error.name !== 'AbortError' && sequence === navigation) location.assign(url.href);
     } finally {
       if (sequence === navigation) {
-        document.body.classList.remove('is-loading');
+        document.body.classList.remove('is-loading', 'journal-changing');
         root.removeAttribute('aria-busy');
       }
     }
