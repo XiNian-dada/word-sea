@@ -59,7 +59,7 @@ void main() {
   vec3 hit = eye + dir * t;
   vec2 uv = wallUv(hit, side);
 
-  float packing = smoothstep(.18, .96, uReveal);
+  float packing = smoothstep(.0, .96, uReveal);
   float ink = carve(uv, packing);
   if (uBlur > 0.0) ink = ink * .5 + (carve(uv + vec2(0.0, uBlur), packing) + carve(uv - vec2(0.0, uBlur), packing)) * .25;
 

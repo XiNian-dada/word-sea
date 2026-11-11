@@ -40,3 +40,23 @@ test('reduced motion settles existing pointer parallax without further frames', 
   assert.equal(world.pointer.sx, 0);
   assert.equal(world.pointer.sy, 0);
 });
+
+test('diving keeps looking into the water and moving until the corridor takes over', () => {
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    const world = new World();
+    world.setViewport(width, height);
+    world.pointer.sx = .4;
+    world.pointer.sy = -.4;
+    world.updateCamera();
+    let previous = [...world.frame.camera.eye];
+    for (let step = 1; step <= 100; step++) {
+      world.dive = step / 100;
+      world.updateCamera();
+      const { eye, pitch } = world.frame.camera;
+      assert.ok(pitch >= 0, `the camera must not look back up at dive ${world.dive}`);
+      assert.ok(eye[1] < previous[1], `descent must not pause at dive ${world.dive}`);
+      assert.ok(eye[2] < previous[2], `forward motion must not pause at dive ${world.dive}`);
+      previous = [...eye];
+    }
+  }
+});

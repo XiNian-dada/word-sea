@@ -111,7 +111,7 @@ function start() {
       animating = true;
     }
     applyVisuals();
-    world.dive = smoothstep(0, .72, scene.mix);
+    world.dive = scene.mix;
     world.cruise = harbor.mix * CRUISE;
     const reading = scene.mix >= 1 && !scene.transitioning;
     // While reading, the sea is hidden: hold its clock and only redraw the walls.
@@ -141,14 +141,17 @@ function start() {
 
   function updateCorridor() {
     const s = corridor.state, mix = scene.mix;
-    s.reveal = smoothstep(.42, .96, mix);
-    s.descent = (1 - smoothstep(.4, 1, mix)) * 70;
+    // Start the submerged lettering before crossing the surface so there is
+    // always a moving depth cue through the darker waterline.
+    // Both views share the same eased progress so there is no second takeoff.
+    s.reveal = smoothstep(.08, .78, mix);
+    s.descent = (1 - mix) * 70;
     s.travel = scene.scroll * 14;
-    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.75, 1, mix)) * smoothstep(.42, .6, mix) : 0;
+    s.blur = scene.transitioning ? .003 * (1 - smoothstep(.7, 1, mix)) * smoothstep(.08, .4, mix) : 0;
     const quiet = mix >= 1 && !state.immersive;
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
-    // Dim the actual scene uniformly; the reading surface remains transparent.
-    s.exposure = lerp(1.05, .28, state.immersive ? 0 : smoothstep(.42, .96, mix));
+    // Ease the corridor light down as its lettering emerges.
+    s.exposure = lerp(1.05, .28, state.immersive ? 0 : s.reveal);
     const aspect = viewport.width / viewport.height;
     s.tan[1] = 1 / 1.62; s.tan[0] = aspect / 1.62;
   }
