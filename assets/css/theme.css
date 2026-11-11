@@ -612,10 +612,11 @@ body:not(.effects-ready) .friend-link { position: relative; width: auto; opacity
   :root { --edge: 20px; }
   body { font-size: 14px; }
   .brand-seal { width: 40px; height: 40px; font-size: 22px; border-radius: 10px; }
-  .brand-name { font-size: 16px; letter-spacing: .2em; }
+  .brand-name { font-size: 16px; letter-spacing: .2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .brand-tagline { font-size: 11px; }
-  .masthead { flex-wrap: wrap; row-gap: 14px; }
-  .weather-chip { max-width: 100%; min-height: 40px; font-size: 12px; }
+  .masthead { flex-wrap: nowrap; align-items: flex-start; gap: 12px; }
+  .brand { gap: 12px; }
+  .weather-chip { flex-shrink: 0; max-width: min(140px, 42%); min-height: 44px; padding-inline: 12px; gap: 8px; font-size: 12px; }
   .hero { display: none; }
   .journal { top: calc(var(--safe-top) + 150px); bottom: calc(var(--safe-bottom) + 96px); left: var(--edge); right: var(--edge); width: auto; }
   .journal:has(.lost-line) { --lost-top: 150px; --lost-bottom: 96px; }
@@ -683,8 +684,6 @@ body:not(.effects-ready) .friend-link { position: relative; width: auto; opacity
   .keyboard-open .article-scroll { inset: 0; padding-top: calc(var(--safe-top) + 20px); }
 }
 @media (max-width: 1000px) and (max-height: 500px) and (min-width: 701px) {
-  .masthead { right: auto; }
-  .weather-chip { position: absolute; top: 0; left: calc(100vw - 2 * var(--edge) - 230px); max-width: 230px; }
   .journal { top: calc(var(--safe-top) + 80px); left: 42%; }
   .journal:has(.lost-line) { --lost-top: 80px; }
   .article-view { --reading: min(720px, 100%); }
