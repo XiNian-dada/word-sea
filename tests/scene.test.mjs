@@ -157,3 +157,18 @@ test('picking follows the projected wall point as camera angles and lens change'
     assert.equal(corridor.pick(x, y, width, height), 7);
   }
 });
+
+test('both inward wall faces read atlas columns from left to right', () => {
+  const corridor = cameraCorridor(), width = 800, height = 600;
+  corridor.ready = true; corridor.tile = 100;
+  Object.assign(corridor.state, { reveal: 1, eyeX: 0, offsetY: 0, descent: 0, travel: 0 });
+  corridor.state.tan.set([1, .75]);
+  corridor.columns = [44, 69, 61, 86].map((left, id) => ({ id, left, width: 2, start: 0, period: 100, run: 100 }));
+  // Viewed from inside, the left wall runs near → far across the screen;
+  // the right wall runs far → near. The atlas must run forward on both.
+  for (const [wall, depths, ids] of [[-4.2, [9, 14], [0, 1]], [4.2, [14, 9], [2, 3]]]) {
+    const screenX = depths.map(depth => (wall / depth + 1) * width / 2);
+    assert.ok(screenX[0] < screenX[1]);
+    assert.deepEqual(screenX.map(x => corridor.pick(x, height / 2, width, height)), ids);
+  }
+});

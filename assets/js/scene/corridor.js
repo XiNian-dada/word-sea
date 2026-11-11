@@ -104,7 +104,7 @@ export class Corridor {
     const t = ((side * 2 - 1) * WALL - ex) / dx;
     if (!(t > 0) || t > 90) return null;
     const hz = ez + dz * t, hy = ey + dy * t;
-    const u = (side ? -hz : hz) / 20 + side * .317, v = -hy / 10.5 + side * .193;
+    const u = (side ? hz : -hz) / 20 + side * .317, v = -hy / 10.5 + side * .193;
     const x = (u - Math.floor(u)) * this.tile, y = (v - Math.floor(v)) * this.tile;
     const column = this.columns.find(c => x >= c.left && x <= c.left + c.width);
     if (!column) return null;

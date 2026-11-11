@@ -33,7 +33,8 @@ float hash12(vec2 p) {
 }
 
 vec2 wallUv(vec3 hit, float side) {
-  return vec2(mix(hit.z, -hit.z, side) / 20.0 + side * .317, -hit.y / 10.5 + side * .193);
+  // The inward faces have opposite horizontal axes; both must read left to right.
+  return vec2(mix(-hit.z, hit.z, side) / 20.0 + side * .317, -hit.y / 10.5 + side * .193);
 }
 
 float carve(vec2 uv, float packing) {
@@ -74,7 +75,7 @@ void main() {
   float distance = t;
   // Light pours down the corridor from the far end, grazing the walls.
   vec3 toLight = normalize(vec3(-hit.x * .25, .6 - hit.y * .02, -1.0));
-  vec3 normal = normalize(vec3(-(side * 2.0 - 1.0), 0.0, 0.0) + vec3(0.0, slopeY, mix(-slopeX, slopeX, side)) * 3.0 * ink);
+  vec3 normal = normalize(vec3(-(side * 2.0 - 1.0), 0.0, 0.0) + vec3(0.0, slopeY, mix(slopeX, -slopeX, side)) * 3.0 * ink);
   float grazing = max(dot(normal, toLight), 0.0);
   float column = .74 + .16 * sin(hit.z * .71 + side * 4.0) + .1 * sin(hit.z * 2.19 + 1.3);
   float stone = .88 + .12 * hash12(floor(uv * vec2(640.0, 320.0)));
