@@ -29,6 +29,12 @@
 
 安装包只含主题文件，不含 Typecho 程序、配置文件、数据库或示例文章。原有文章、评论及永久链接继续使用。
 
+### 自动发布安装包
+
+向 Forgejo 推送新 tag 后，Action 会运行场景测试，将该 tag 的主题源码打包为 `word-sea-typecho-<版本>.zip`，并发布到 [Releases](https://akyuu.leeinx.com/XiNian-dada/word-sea/releases)。例如 tag `v0.3.11` 对应 `word-sea-typecho-0.3.11.zip`。下载 Release 的 ZIP 附件，解压后只有一个 `word-sea/` 顶层目录，可直接上传到 `usr/themes/`；测试、发布脚本和本地截图不包含在安装包内。
+
+发布前先更新 `index.php` 中的主题版本及本文件的版本说明，提交并推送 `main`，然后执行 `git tag v<版本>` 和 `git push origin v<版本>`。发布使用 Forgejo 自动生成的仓库令牌，无需另外保存个人令牌。上传失败时保留草稿，重跑会继续上传；已有同名附件会验证内容，避免覆盖。也可在 Actions 中手动运行工作流验证打包，分支上的手动运行不会创建 Release。
+
 若启用时提示「您选择的风格不存在」，先检查服务器上的主题目录名。Typecho 会将启用参数中的空格转换成连字符，例如 `word-sea 2` 会变成 `word-sea-2`，导致目录不匹配。将包含主题 `index.php` 的文件夹改名为 `word-sea`，回到「控制台 → 外观」刷新后重新点击启用，不要刷新原来的报错地址。
 
 ### 从旧版本升级

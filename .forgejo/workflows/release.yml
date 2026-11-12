@@ -1,0 +1,32 @@
+name: Typecho theme release
+
+on:
+  push:
+    tags:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: docker
+    timeout-minutes: 10
+    steps:
+      - name: Checkout tagged source
+        uses: https://data.forgejo.org/actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test scene behavior
+        run: node --test tests/scene.test.mjs
+      - name: Build installable ZIP
+        run: node .forgejo/scripts/package.mjs
+        env:
+          RELEASE_TAG: ${{ forgejo.ref_name }}
+      - name: Publish release with ZIP attachment
+        if: startsWith(forgejo.ref, 'refs/tags/')
+        run: node .forgejo/scripts/release.mjs
+        env:
+          RELEASE_TAG: ${{ forgejo.ref_name }}
+          RELEASE_SHA: ${{ forgejo.sha }}
+          RELEASE_REPOSITORY: ${{ forgejo.repository }}
+          RELEASE_API_URL: ${{ forgejo.api_url }}
+          RELEASE_TOKEN: ${{ forgejo.token }}
