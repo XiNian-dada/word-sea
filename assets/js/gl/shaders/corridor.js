@@ -41,6 +41,7 @@ float carve(vec2 uv, float packing) {
   vec2 g = texture(uQuotes, uv).rg;
   float edge = clamp(fwidth(g.r) * .8, .01, .5);
   float ink = smoothstep(.5 - edge, .5 + edge, g.r);
+  ink *= mix(1.0, .45, smoothstep(.12, .4, edge));
   // Quotations are written in order of a per-repetition priority as the walls appear.
   return ink * smoothstep(g.g - .06, g.g + .06, packing);
 }
@@ -101,15 +102,15 @@ void main() {
 
   // Mist thickens with distance: deep and quiet down the reading channel, softly echoing the sky's time of day.
   float fog = 1.0 - exp(-pow(distance / 24.0, 1.3));
-  vec3 mist = mix(vec3(.007, .010, .016) + uGlow * .008, uGlow * .085, smoothstep(.32, 1.0, fog) * exp(-abs(vNdc.y - uLightNdc.y) * 1.65)) * (1.02 - vNdc.y * .12);
+  vec3 mist = mix(vec3(.014, .019, .028) + uGlow * .014, uGlow * .11, smoothstep(.32, 1.0, fog) * exp(-abs(vNdc.y - uLightNdc.y) * 1.65)) * (1.02 - vNdc.y * .12);
   color = mix(color, mist, fog * smoothstep(.3, .95, uReveal) * mix(1.0, .5, picked * ink));
 
   // Soft volumetric glow at the far end of the corridor, avoiding a harsh pinpoint behind the text.
   vec2 lp = vec2((vNdc.x - uLightNdc.x) * uTan.x / uTan.y, vNdc.y - uLightNdc.y);
   float r = length(lp);
   float revealGlow = smoothstep(.6, .98, uReveal);
-  color += uGlow * (exp(-r * r / .022) * .12 + exp(-r * r / .095) * .045) * revealGlow;
-  float shaft = exp(-abs(lp.x) * 8.5) * smoothstep(.38, -.65, lp.y) * .0045;
+  color += uGlow * (exp(-r * r / .0016) * .38 + exp(-r * r / .018) * .13 + exp(-r * r / .095) * .045) * revealGlow;
+  float shaft = exp(-abs(lp.x) * 8.5) * smoothstep(.38, -.65, lp.y) * .007;
   color += uGlow * shaft * revealGlow;
 
   // Soft circular bokeh dust motes drifting across two depth layers in the corridor light.
