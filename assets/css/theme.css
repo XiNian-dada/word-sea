@@ -702,6 +702,8 @@ body:not(.effects-ready) .friend-link { position: relative; width: auto; opacity
 @media (max-width: 700px), (max-width: 1000px) and (max-height: 500px) {
   :root { --edge: 20px; }
   body { font-size: 14px; }
+  .scene-grade { background: linear-gradient(180deg, rgb(4 7 15 / .5) 0%, rgb(4 7 15 / .26) 22%, rgb(4 7 15 / .34) 55%, rgb(4 7 15 / .72) 100%); }
+  .story-meta, .story-number { text-shadow: 0 1px 2px rgb(2 5 12 / .8); }
   .brand-seal { width: 40px; height: 40px; font-size: 22px; border-radius: 10px; }
   .brand-name { font-size: 16px; letter-spacing: .2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 18px; margin: -8px -18px; }
   .brand-tagline { font-size: 11px; }
