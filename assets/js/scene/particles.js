@@ -90,7 +90,7 @@ void main() {
   vec3 lampPos = aLantern.xyz + vec3(sway, sin(uTime * 1.9 + vPhase) * .04, 0.0);
   vec3 waterPos = vec3(aLantern.x, aLantern.y - 2.55, aLantern.z);
   vec4 clip = uViewProj * vec4(kind == 3 ? waterPos : lampPos, 1.0);
-  float distFade = smoothstep(60.0, 22.0, clip.w);
+  float distFade = mix(.5, 1.0, smoothstep(95.0, 28.0, clip.w));
   float pixels = uViewport.y / max(clip.w, .2);
   vec2 size;
   if (kind == 0) {
