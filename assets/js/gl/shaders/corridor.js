@@ -23,6 +23,10 @@ uniform float uExposure;
 uniform float uBlur;
 uniform vec3 uGlow;
 uniform float uTile;
+uniform vec3 uGradeShadow;
+uniform vec3 uGradeHighlight;
+uniform float uGradeSat;
+uniform float uGradeContrast;
 
 const float WALL = 4.2;
 
@@ -48,8 +52,13 @@ float carve(vec2 uv, float packing) {
 
 vec3 tonemap(vec3 c) {
   c *= uExposure;
-  c = (c * (2.51 * c + .03)) / (c * (2.43 * c + .59) + .14);
-  return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  c = clamp((c * (2.51 * c + .03)) / (c * (2.43 * c + .59) + .14), 0.0, 1.0);
+  // Cinematic grade: split-tone shadows and highlights, then saturation and a gentle S-curve.
+  float l = dot(c, vec3(.2126, .7152, .0722));
+  c *= mix(uGradeShadow, uGradeHighlight, smoothstep(0.0, .65, l));
+  c = mix(vec3(l), c, uGradeSat);
+  vec3 g = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  return mix(g, g * g * (3.0 - 2.0 * g), uGradeContrast);
 }
 
 void main() {

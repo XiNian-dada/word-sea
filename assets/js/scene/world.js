@@ -63,6 +63,7 @@ export class World {
         overcastColor: new Float32Array([.78, .82, .88]), fog: .003, flash: 0,
         discDir: new Float32Array(3), discColor: new Float32Array(3), discSize: .012, moon: 0, moonPhase: moonPhase(), stars: 0, aurora: 0,
         water: new Float32Array(3), ink: new Float32Array(3), skyTint: new Float32Array([1, 1, 1]),
+        gradeShadow: new Float32Array([1, 1, 1]), gradeHighlight: new Float32Array([1, 1, 1]), gradeSat: 1, gradeContrast: 0,
       },
       sea: {
         visible: true, waveTime: 0, amplitude: 1, wavesA, wavesB, windDir: new Float32Array([0, -1]), windAlign: 0,
@@ -230,6 +231,7 @@ export class World {
     a.stars = p.stars;
     a.aurora = this.aurora * smoothstep(.55, 1, night) * (1 - a.overcast * .85);
     a.water.set(p.water); a.ink.set(p.ink);
+    a.gradeShadow.set(p.gradeShadow); a.gradeHighlight.set(p.gradeHighlight); a.gradeSat = p.gradeSat; a.gradeContrast = p.gradeContrast;
   }
 
   updateWeather(dt) {

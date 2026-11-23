@@ -17,6 +17,10 @@ uniform vec3 uSkyTint;       // moonlit skies read blue to dark-adapted eyes
 uniform vec3 uWaterDeep;     // scattering colour of the water body
 uniform float uTime;
 uniform float uAurora;       // rare night-sky aurora easter egg, 0 … 1
+uniform vec3 uGradeShadow;
+uniform vec3 uGradeHighlight;
+uniform float uGradeSat;
+uniform float uGradeContrast;
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * .1031);
@@ -87,8 +91,13 @@ vec3 applyFog(vec3 color, vec3 dir, float distance) {
 
 vec3 tonemap(vec3 c) {
   c *= uExposure;
-  c = (c * (2.51 * c + .03)) / (c * (2.43 * c + .59) + .14);
-  return pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  c = clamp((c * (2.51 * c + .03)) / (c * (2.43 * c + .59) + .14), 0.0, 1.0);
+  // Cinematic grade: split-tone shadows and highlights, then saturation and a gentle S-curve.
+  float l = dot(c, vec3(.2126, .7152, .0722));
+  c *= mix(uGradeShadow, uGradeHighlight, smoothstep(0.0, .65, l));
+  c = mix(vec3(l), c, uGradeSat);
+  vec3 g = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));
+  return mix(g, g * g * (3.0 - 2.0 * g), uGradeContrast);
 }
 
 vec3 dither(vec3 c) {

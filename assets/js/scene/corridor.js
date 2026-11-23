@@ -132,6 +132,8 @@ export class Corridor {
       .set('uTravel', s.travel).set('uDescent', s.descent)
       .set('uReveal', s.reveal).set('uPickedStrength', this.highlight.strength).set('uTime', frame.time)
       .set('uExposure', s.exposure).set('uBlur', s.blur).set('uGlow', s.glow).set('uTile', this.tile)
+      .set('uGradeShadow', frame.atmosphere.gradeShadow).set('uGradeHighlight', frame.atmosphere.gradeHighlight)
+      .set('uGradeSat', frame.atmosphere.gradeSat).set('uGradeContrast', frame.atmosphere.gradeContrast)
       .texture('uQuotes', this.quotes).texture('uQuoteIds', this.ids).texture('uPicked', this.picked);
     gl.disable(gl.DEPTH_TEST);
     gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);

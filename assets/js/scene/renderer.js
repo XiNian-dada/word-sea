@@ -112,7 +112,8 @@ export class Renderer {
     program.texture('uSkyLut', this.lut.texture)
       .set('uLightDir', a.lightDir).set('uLightColor', a.lightColor).set('uAmbient', a.ambient)
       .set('uExposure', a.exposure).set('uOvercast', a.overcast).set('uOvercastColor', a.overcastColor)
-      .set('uFogDensity', a.fog).set('uFlash', a.flash).set('uSkyTint', a.skyTint).set('uAurora', a.aurora);
+      .set('uFogDensity', a.fog).set('uFlash', a.flash).set('uSkyTint', a.skyTint).set('uAurora', a.aurora)
+      .set('uGradeShadow', a.gradeShadow).set('uGradeHighlight', a.gradeHighlight).set('uGradeSat', a.gradeSat).set('uGradeContrast', a.gradeContrast);
   }
 
   render(frame) {
