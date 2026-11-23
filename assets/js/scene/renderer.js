@@ -159,7 +159,7 @@ export class Renderer {
     p.set('uInvViewProj', frame.camera.invViewProj).set('uCamera', frame.camera.eye).set('uTime', frame.time)
       .set('uSunDir', a.discDir).set('uDiscColor', a.discColor).set('uDiscSize', a.discSize)
       .set('uMoon', a.moon).set('uMoonPhase', a.moonPhase).set('uStars', a.stars)
-      .set('uCloudOffset', c.offset).set('uCloudCover', c.cover).set('uCloudInk', c.ink).set('uClouds', c.enabled)
+      .set('uCloudOffset', c.offset).set('uCloudCover', c.cover).set('uCloudHeaviness', c.heaviness).set('uCloudInk', c.ink).set('uClouds', c.enabled)
       .set('uUnderwater', frame.camera.underwater ? 1 : 0).set('uWaterDeep', a.water)
       .texture('uNoise', this.textures.noise).texture('uCloudGlyphs', this.textures.glyphs);
     // Only pixels the sea did not cover still hold the far depth.
