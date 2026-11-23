@@ -201,8 +201,8 @@ void main() {
       vec3 Ld = L * inversesqrt(d2);
       float spec = pow(max(dot(N, normalize(Ld + V)), 0.0), 220.0) * (.25 + fresnel * 2.6);
       float pool = exp(-d2 * .022) * (.028 + ink * .055);
-      float diffuse = max(dot(N, Ld), 0.0) * .035;
-      color += uLanternColors[i] * ((spec * 2.2 + diffuse) * (.4 + ink * 1.2) / (1.0 + d2 * .035) + pool) * uHarbor;
+      float diffuse = max(dot(N, Ld), 0.0) * .02;
+      color += uLanternColors[i] * ((spec * 2.2 + diffuse) * (.3 + ink * .7) / (1.0 + d2 * .035) + pool) * uHarbor;
     }
   }
   color += uFlash * vec3(.5, .55, .7) * (fresnel + ink * .3);

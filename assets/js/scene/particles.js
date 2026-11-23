@@ -94,10 +94,10 @@ void main() {
   float pixels = uViewport.y / max(clip.w, .2);
   vec2 size;
   if (kind == 0) {
-    size = vec2(1.0) * pixels * (1.45 + aLantern.w * .75) * breathe;
+    size = vec2(1.0) * pixels * (1.8 + aLantern.w * .75) * breathe;
   } else if (kind == 1) {
     // Graceful elongated floating lantern silhouette.
-    size = vec2(.24, .34) * pixels * (1.0 + aLantern.w * .28) * (.55 + .45 * aColor.a * distFade);
+    size = vec2(.3, .44) * pixels * (1.0 + aLantern.w * .28) * (.55 + .45 * aColor.a * distFade);
   } else if (kind == 2) {
     // Soft luminous filament descending gently towards the waves.
     vec4 base = uViewProj * vec4(waterPos, 1.0);
