@@ -297,6 +297,26 @@ export default function setup() {
     url.search = new URLSearchParams({ name, count: '6', language: 'zh', format: 'json' });
     return (await json(url, signal)).results || [];
   }
+  function matchesLocalZone(p) {
+    if (!p || !Number.isFinite(p.longitude)) return false;
+    const localOffset = -new Date().getTimezoneOffset() / 60;
+    const diff = Math.abs((((p.longitude / 15 - localOffset) % 24) + 36) % 24 - 12);
+    return diff <= 3.5;
+  }
+  const TIMEZONE_PLACES = {
+    'Asia/Shanghai': { latitude: 30.67, longitude: 104.06, name: '成都' },
+    'Asia/Chongqing': { latitude: 30.67, longitude: 104.06, name: '成都' },
+    'Asia/Harbin': { latitude: 45.75, longitude: 126.65, name: '哈尔滨' },
+    'Asia/Urumqi': { latitude: 43.82, longitude: 87.62, name: '乌鲁木齐' },
+    'Asia/Hong_Kong': { latitude: 22.32, longitude: 114.17, name: '香港' },
+    'Asia/Taipei': { latitude: 25.03, longitude: 121.57, name: '台北' },
+    'Asia/Tokyo': { latitude: 35.68, longitude: 139.69, name: 'Tokyo' },
+    'Asia/Seoul': { latitude: 37.57, longitude: 126.98, name: 'Seoul' },
+    'Asia/Singapore': { latitude: 1.35, longitude: 103.82, name: 'Singapore' },
+    'Europe/London': { latitude: 51.51, longitude: -0.13, name: 'London' },
+    'America/New_York': { latitude: 40.71, longitude: -74.01, name: 'New York' },
+    'America/Los_Angeles': { latitude: 34.05, longitude: -118.24, name: 'Los Angeles' },
+  };
   async function estimate() {
     cancel();
     const version = generation,
@@ -304,18 +324,22 @@ export default function setup() {
     request = controller;
     message('正在估算附近的城市……');
     try {
-      const p = await json(
-        'https://ipwho.is/?fields=success,city,region,country,latitude,longitude',
-        controller.signal,
-      );
-      if (version !== generation) return;
-      if (!validPlace({ ...p, name: p.city || p.region || p.country })) throw new Error('No place');
-      await choose({
-        latitude: p.latitude,
-        longitude: p.longitude,
-        name: p.city || p.region || p.country,
-        source: 'ip',
-      });
+      let candidate = null;
+      try {
+        const p = await json('https://get.geojs.io/v1/ip/geo.json', controller.signal);
+        if (version !== generation) return;
+        const parsed = { latitude: Number(p.latitude), longitude: Number(p.longitude), name: p.city || p.region || p.country };
+        if (validPlace(parsed) && matchesLocalZone(parsed)) candidate = parsed;
+      } catch (error) {
+        if (error?.name === 'AbortError' || controller.signal.aborted || version !== generation) throw error;
+      }
+      if (!candidate) {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const fallback = TIMEZONE_PLACES[tz];
+        if (validPlace(fallback)) candidate = fallback;
+      }
+      if (!candidate) throw new Error('No place');
+      await choose({ ...candidate, source: 'ip' });
     } catch {
       if (version === generation) message('暂时无法估算城市。输入城市名，或点击「使用我的位置」。');
     } finally {
@@ -326,7 +350,7 @@ export default function setup() {
     if (started || !enabled) return;
     started = true;
     const saved = storage.get('wordsea-weather-place') || storage.get('wordsea-weather-place', true);
-    if (validPlace(saved) && (saved.source === 'city' || Date.now() - saved.saved < 4 * 60 * 60 * 1000)) {
+    if (validPlace(saved) && (saved.source !== 'ip' || matchesLocalZone(saved)) && (saved.source === 'city' || Date.now() - saved.saved < 4 * 60 * 60 * 1000)) {
       place = roundedPlace(saved);
       await refresh();
       return;

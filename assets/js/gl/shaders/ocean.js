@@ -109,8 +109,12 @@ void main() {
   // Fine detail would alias in the distance; it hands over to rougher glitter.
   float near = exp(-distance * .018);
   vec2 drift = uWindDir * uWaveTime;
-  vec2 detail = (texture(uDetail, vWorld.xz * .061 + drift * .021).xy * 2.0 - 1.0) * .62
-              + (texture(uDetail, vWorld.xz * .157 - vec2(drift.y, -drift.x) * .037).xy * 2.0 - 1.0) * .38;
+  vec2 d0 = texture(uDetail, vWorld.xz * .061 + drift * .021).xy * 2.0 - 1.0;
+  vec2 d1 = distance < 260.0
+    ? texture(uDetail, vWorld.xz * .157 - vec2(drift.y, -drift.x) * .037).xy * 2.0 - 1.0
+    : vec2(0.0);
+  vec2 detail = d0 * .62 + d1 * .38;
+  float chop = clamp(length(d0 * .55 + d1 * .95) * .85, 0.0, 1.0);
   detail *= (.18 + uWind * .55) * (.25 + .75 * near);
   if (uRain > .001) detail += rainRipples(vWorld.xz) * uRain * near;
   vec3 N = normalize(vNormal + vec3(detail.x, 0.0, detail.y));
@@ -145,6 +149,13 @@ void main() {
   vec3 R = reflect(-V, N);
   R.y = abs(R.y) + .002;
   vec3 reflected = skyRadiance(normalize(R));
+  if (uAurora > .001) {
+    vec3 rn = normalize(R);
+    float aurBand = smoothstep(.04, .24, rn.y) * (1.0 - smoothstep(.26, .58, rn.y));
+    float aurWave = .38 + .62 * pow(.5 + .5 * sin(rn.x * 4.4 + uTime * .22 + sin(rn.z * 2.2 - uTime * .12)), 1.6);
+    vec3 aurTint = mix(vec3(.006, .036, .022), vec3(.018, .010, .030), smoothstep(.18, .44, rn.y));
+    reflected += aurTint * aurBand * aurWave * uAurora * (1.0 - uOvercast * .85);
+  }
 
   // Sun (or moon) glitter: a GGX lobe broken up by the detail normals.
   vec3 H = normalize(V + uLightDir);
@@ -154,31 +165,44 @@ void main() {
   float D = a2 / (PI * pow(NdH * NdH * (a2 - 1.0) + 1.0, 2.0));
   vec3 glitter = uLightColor * D * fresnel * smoothstep(0.0, .1, NdL) * .22 * (1.0 - uOvercast * .9);
 
-  // Light scattered back out of the water body, stronger through thin crests.
+  // Light scattered back out of the water body: richer subsurface glow through thin sunlit crests.
   float crest = clamp(vCrest, 0.0, 1.0);
-  vec3 body = uWaterDeep * (uAmbient * .55 + uLightColor * max(uLightDir.y, .0) * .18);
+  vec3 body = uWaterDeep * (uAmbient * .58 + uLightColor * max(uLightDir.y, .0) * .2);
   vec2 sunward = normalize(uLightDir.xz + vec2(1e-4));
-  float through = pow(max(dot(normalize(-V.xz + vec2(1e-4)), sunward), 0.0), 3.0) * crest * crest;
-  body += uWaterDeep * uLightColor * through * .9 * max(uLightDir.y + .2, 0.0);
+  float forwardScatter = pow(max(dot(normalize(-V.xz + vec2(1e-4)), sunward), 0.0), 2.6);
+  vec3 sssTint = mix(uWaterDeep, vec3(.018, .085, .105), .45);
+  float thinCrest = pow(crest, 2.0) * (1.0 - NdV * .45);
+  body += sssTint * uLightColor * (forwardScatter * 1.45 + .22) * thinCrest * max(uLightDir.y + .22, .02);
+  body += sssTint * uAmbient * thinCrest * .55;
 
   vec3 water = mix(body, reflected, fresnel);
-  // Letters are a matte film that lifts out of the water and mirrors more of the sky.
-  float catchLight = clamp(fresnel * 1.8 + .22, 0.0, 1.0);
-  vec3 letter = mix(body * 1.7 + uInk * (uAmbient * .32 + uLightColor * NdL * .05), reflected * 1.1, catchLight);
-  float foam = smoothstep(.55, 1.0, crest) * (.2 + uWind * .8);
-  letter += (uAmbient * .55 + uLightColor * .12) * foam;
-  vec3 gap = water * .62;
-  color = mix(gap, letter, ink) + glitter * (.35 + ink * 1.15);
+  // Textured lacy whitecaps concentrated along breaking windward crests, fading smoothly with distance.
+  float foamMask = smoothstep(.58, .98, crest + chop * .26 - (1.0 - uWind) * .16) * (.18 + uWind * .82) * (.25 + .75 * near);
+  float lace = smoothstep(.28, .78, chop + crest * .32);
+  float seaFoam = foamMask * lace * .52;
+  vec3 foamColor = (uAmbient * .92 + uLightColor * (.16 + NdL * .22)) * vec3(.92, .96, 1.0);
+  water = mix(water, foamColor, seaFoam * (1.0 - uHarbor * .5));
 
-  // Friends' lanterns: point lights whose reflections are torn into streaks by the waves.
+  // Letters are a matte film that lifts out of the water and mirrors the sky softly.
+  float catchLight = clamp(fresnel * 1.15 + .02, 0.0, .74);
+  vec3 letter = mix(body * 1.32 + uInk * (uAmbient * .18 + uLightColor * NdL * .03), reflected * .88, catchLight);
+  float foam = smoothstep(.55, 1.0, crest) * (.14 + uWind * .48);
+  letter += (uAmbient * .32 + uLightColor * .07) * foam;
+  letter = mix(letter, foamColor, seaFoam * .65);
+  float wordInk = ink * mix(1.0, .32, uHarbor);
+  vec3 gap = water * mix(.84, .92, uHarbor);
+  color = mix(gap, letter, wordInk) + glitter * (.26 + wordInk * .58) * mix(1.0, .45, uHarbor);
+
+  // Friends' lanterns: point lights whose reflections are torn into streaks and warm pools by the waves.
   if (uHarbor > .001) {
     for (int i = 0; i < 6; i++) {
       vec3 L = uLanterns[i] - vWorld;
       float d2 = dot(L, L);
       vec3 Ld = L * inversesqrt(d2);
-      float spec = pow(max(dot(N, normalize(Ld + V)), 0.0), 260.0) * (.2 + fresnel * 2.5);
-      float diffuse = max(dot(N, Ld), 0.0) * .02;
-      color += uLanternColors[i] * (spec * 2.2 + diffuse) * (.4 + ink * 1.2) / (1.0 + d2 * .035) * uHarbor;
+      float spec = pow(max(dot(N, normalize(Ld + V)), 0.0), 220.0) * (.25 + fresnel * 2.6);
+      float pool = exp(-d2 * .022) * (.042 + ink * .09);
+      float diffuse = max(dot(N, Ld), 0.0) * .035;
+      color += uLanternColors[i] * ((spec * 2.2 + diffuse) * (.4 + ink * 1.2) / (1.0 + d2 * .035) + pool) * uHarbor;
     }
   }
   color += uFlash * vec3(.5, .55, .7) * (fresnel + ink * .3);

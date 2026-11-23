@@ -62,7 +62,7 @@ export class Renderer {
   buildMesh(tanHalfX) {
     if (this.mesh && Math.abs(this.meshAspect - tanHalfX) < 1e-3) return;
     this.meshAspect = tanHalfX;
-    const gl = this.gl, rows = 260, cols = 200;
+    const gl = this.gl, rows = 224, cols = 176;
     const vertices = new Float32Array((rows + 1) * (cols + 1) * 2);
     let v = 0;
     for (let r = 0; r <= rows; r++) {
@@ -112,7 +112,7 @@ export class Renderer {
     program.texture('uSkyLut', this.lut.texture)
       .set('uLightDir', a.lightDir).set('uLightColor', a.lightColor).set('uAmbient', a.ambient)
       .set('uExposure', a.exposure).set('uOvercast', a.overcast).set('uOvercastColor', a.overcastColor)
-      .set('uFogDensity', a.fog).set('uFlash', a.flash).set('uSkyTint', a.skyTint);
+      .set('uFogDensity', a.fog).set('uFlash', a.flash).set('uSkyTint', a.skyTint).set('uAurora', a.aurora);
   }
 
   render(frame) {

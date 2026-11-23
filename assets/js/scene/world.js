@@ -30,6 +30,7 @@ export class World {
     this.cloudOffset = [0, 0];
     this.dive = 0;
     this.cruise = 0;
+    this.aurora = 0;
     this.lightning = { next: NaN, started: -Infinity, strength: 1, duration: .12, echo: Infinity, echoDuration: .04 };
     this.seed = 17329;
 
@@ -60,7 +61,7 @@ export class World {
         dirty: true, lightDir: new Float32Array(3), power: 22, rayleigh: 1, mie: 1, mieG: .76,
         lightColor: new Float32Array(3), ambient: new Float32Array(3), exposure: 1, overcast: 0,
         overcastColor: new Float32Array([.78, .82, .88]), fog: .003, flash: 0,
-        discDir: new Float32Array(3), discColor: new Float32Array(3), discSize: .012, moon: 0, moonPhase: moonPhase(), stars: 0,
+        discDir: new Float32Array(3), discColor: new Float32Array(3), discSize: .012, moon: 0, moonPhase: moonPhase(), stars: 0, aurora: 0,
         water: new Float32Array(3), ink: new Float32Array(3), skyTint: new Float32Array([1, 1, 1]),
       },
       sea: {
@@ -130,7 +131,7 @@ export class World {
   }
 
   /** Where a screen point (0…1 fractions) meets calm water, seen from the end of the cruise. */
-  harborPoint(fx, fy) {
+  harborPoint(fx, fy, cruise = CRUISE) {
     const { width, height } = this.viewport, aspect = width / height;
     const tanY = Math.max(Math.tan(22.5 * DEG), .36 / aspect), tanX = tanY * aspect, pitch = Math.atan(.2 * tanY);
     // Keep the nearest lights a little way out on the water.
@@ -139,7 +140,7 @@ export class World {
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const dy = vy * cp - sp, dz = -(vy * sp + cp);
     const t = dy < -.02 ? (EYE - LANTERN_HEIGHT * .55) / -dy : 140;
-    return { x: vx * t, z: -CRUISE + dz * t };
+    return { x: vx * t, z: -cruise + dz * t };
   }
 
   project(out, x, y, z) {
@@ -225,7 +226,9 @@ export class World {
     const moon = p.light === 'moon';
     for (let i = 0; i < 3; i++) a.discColor[i] = a.lightColor[i] / Math.max(p.power, 1e-3) * swap * shade * (moon ? .9 : p.power / 22);
     a.moon = moon ? 1 : 0;
+    a.moonPhase = Number.isFinite(this.moonPhase) ? this.moonPhase : moonPhase();
     a.stars = p.stars;
+    a.aurora = this.aurora * smoothstep(.55, 1, night) * (1 - a.overcast * .85);
     a.water.set(p.water); a.ink.set(p.ink);
   }
 

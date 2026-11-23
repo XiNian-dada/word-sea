@@ -12,20 +12,20 @@ export const PRESETS = {
     exposure: .42, water: [.006, .028, .046], ink: [.85, .95, 1], disc: .0115, stars: 0, fog: .0032, hour: 8,
   },
   noon: {
-    label: '正午', light: 'sun', elevation: 34, azimuth: 18, power: 22, rayleigh: 1, mie: .7, mieG: .76,
+    label: '正午', light: 'sun', elevation: 34, azimuth: -10, power: 22, rayleigh: 1, mie: .7, mieG: .76,
     exposure: .34, water: [.004, .032, .055], ink: [.85, .96, 1], disc: .011, stars: 0, fog: .0018, hour: 12,
   },
   afternoon: {
-    label: '午后', light: 'sun', elevation: 7, azimuth: 24, power: 22, rayleigh: 1, mie: 1.45, mieG: .78,
+    label: '午后', light: 'sun', elevation: 7, azimuth: -16, power: 22, rayleigh: 1, mie: 1.45, mieG: .78,
     exposure: .42, water: [.005, .026, .045], ink: [1, .94, .86], disc: .0115, stars: 0, fog: .003, hour: 15,
   },
   sunset: {
-    label: '夕照', light: 'sun', elevation: 1.25, azimuth: 2, power: 24, rayleigh: 1.1, mie: 1.7, mieG: .82,
-    exposure: .46, water: [.012, .016, .036], ink: [1, .86, .8], disc: .0135, stars: .15, fog: .0034, hour: 18,
+    label: '夕照', light: 'sun', elevation: 1.25, azimuth: -4, power: 24, rayleigh: 1.1, mie: 1.7, mieG: .82,
+    exposure: .38, water: [.012, .016, .036], ink: [1, .86, .8], disc: .0135, stars: .15, fog: .0034, hour: 18,
   },
   night: {
-    label: '月夜', light: 'moon', elevation: 11, azimuth: 15, power: .35, rayleigh: 1, mie: .45, mieG: .9,
-    exposure: 4, water: [.010, .022, .045], ink: [.75, .86, 1], disc: .0105, stars: 1, fog: .0032, hour: 22,
+    label: '月夜', light: 'moon', elevation: 11, azimuth: -12, power: .35, rayleigh: 1, mie: .45, mieG: .9,
+    exposure: 4, water: [.010, .022, .045], ink: [.75, .86, 1], disc: .019, stars: 1, fog: .0032, hour: 22,
   },
 };
 
@@ -34,6 +34,10 @@ export const themeAtHour = h => h >= 5 && h < 7 ? 'daybreak' : h >= 7 && h < 10 
 
 const R0 = 6360e3, R1 = 6420e3, HR = 7994, HM = 1200;
 const BR = [5.8e-6, 13.5e-6, 33.1e-6], BM = 21e-6;
+// Ozone: absorption only. Its column is folded onto the air's scale height, so
+// the same optical depth carries both and no extra loop runs; the extra weight
+// stands in for the high layer that twilight light still crosses.
+const BO = [.65e-6 * 2.8, 1.881e-6 * 2.8, .085e-6 * 2.8];
 
 function sphereFar(ox, oy, oz, dx, dy, dz, r) {
   const b = ox * dx + oy * dy + oz * dz, c = ox * ox + oy * oy + oz * oz - r * r, h = b * b - c;
@@ -55,7 +59,7 @@ export function transmittance(out, light, rayleigh, mie) {
     const h = Math.max(Math.hypot(x, y, z) - R0, 0);
     depthR += Math.exp(-h / HR) * segment; depthM += Math.exp(-h / HM) * segment;
   }
-  for (let c = 0; c < 3; c++) out[c] = Math.exp(-(BR[c] * rayleigh * depthR + BM * mie * 1.1 * depthM));
+  for (let c = 0; c < 3; c++) out[c] = Math.exp(-((BR[c] * rayleigh + BO[c]) * depthR + BM * mie * 1.1 * depthM));
   return out;
 }
 
@@ -81,7 +85,7 @@ export function scatter(out, dir, light, power, rayleigh, mie, g) {
       lr += Math.exp(-hq / HR) * ls; lm += Math.exp(-hq / HM) * ls;
     }
     for (let c = 0; c < 3; c++) {
-      const attenuation = Math.exp(-(BR[c] * rayleigh * (depthR + lr) + BM * mie * 1.1 * (depthM + lm)));
+      const attenuation = Math.exp(-((BR[c] * rayleigh + BO[c]) * (depthR + lr) + BM * mie * 1.1 * (depthM + lm)));
       sumR[c] += attenuation * hr; sumM[c] += attenuation * hm;
     }
   }
@@ -111,4 +115,13 @@ export function moonPhase(date = new Date()) {
   const synodic = 29.530588853, reference = Date.UTC(2000, 0, 6, 18, 14);
   const days = (date.getTime() - reference) / 86400000;
   return ((days / synodic) % 1 + 1) % 1;
+}
+
+/** Chinese lunar phase name and illuminated percentage from a 0…1 phase value. */
+export function moonPhaseInfo(phase = moonPhase()) {
+  const p = ((phase % 1) + 1) % 1;
+  const name = p < .03 || p >= .97 ? '新月' : p < .22 ? '蛾眉月' : p < .28 ? '上弦月'
+    : p < .47 ? '盈凸月' : p < .53 ? '满月' : p < .72 ? '亏凸月' : p < .78 ? '下弦月' : '残月';
+  const illumination = Math.round((1 - Math.cos(p * 2 * Math.PI)) * 50);
+  return { phase: p, name, illumination };
 }

@@ -107,7 +107,7 @@ $wordSeaIcon = [
     <div id="site-status" role="status" aria-live="polite"></div>
   </main>
   <script id="wordsea-config" type="application/json"><?php echo wordsea_json($wordSeaConfig); ?></script>
-  <script data-wordsea-runtime src="<?php echo wordsea_asset('assets/collect-data.js'); ?>"></script>
+  <script data-wordsea-runtime defer src="<?php echo wordsea_asset('assets/collect-data.js'); ?>"></script>
   <script data-wordsea-runtime type="module" src="<?php echo wordsea_asset('assets/js/main.js'); ?>"></script>
   <?php $this->footer(); ?>
 </body>

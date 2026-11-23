@@ -16,6 +16,7 @@ uniform float uFlash;        // lightning, 0 … 1
 uniform vec3 uSkyTint;       // moonlit skies read blue to dark-adapted eyes
 uniform vec3 uWaterDeep;     // scattering colour of the water body
 uniform float uTime;
+uniform float uAurora;       // rare night-sky aurora easter egg, 0 … 1
 
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * .1031);
@@ -36,6 +37,14 @@ vec3 skyRadiance(vec3 dir) {
   #ifdef LUT_ENCODED
   c = c / max(1.0 - c, vec3(1.0 / 255.0)) * 4.0;
   #endif
+  // Single scattering leaves a high-sun horizon sallow; light scattered more
+  // than once whitens it towards a pale blue haze.
+  float lowSky = (1.0 - smoothstep(0.0, .32, dir.y)) * smoothstep(.08, .5, uLightDir.y);
+  c = mix(c, dot(c, vec3(.2126, .7152, .0722)) * vec3(.9, .98, 1.1), lowSky * .6);
+  // Under moonlight the eye sees in rods: hues fade before the blue shift,
+  // so the reddened horizon reads slate rather than olive.
+  float scotopic = clamp((uSkyTint.b - 1.0) / .35, 0.0, 1.0);
+  c = mix(c, vec3(dot(c, vec3(.2126, .7152, .0722))), scotopic * .8);
   c *= uSkyTint;
   // Overcast skies keep their brightness gradient but lose hue and direction.
   float lum = dot(c, vec3(.2126, .7152, .0722));
@@ -107,6 +116,9 @@ const float PI = 3.14159265359;
 const float R0 = 6360e3, R1 = 6420e3, HR = 7994.0, HM = 1200.0;
 const vec3 BR = vec3(5.8e-6, 13.5e-6, 33.1e-6);
 const float BM = 21e-6;
+// Ozone absorbs orange and green without scattering; it keeps twilight
+// zeniths blue. Its column rides along with the air's (see atmosphere.js).
+const vec3 BO = vec3(.65e-6, 1.881e-6, .085e-6) * 2.8;
 
 vec2 sphere(vec3 o, vec3 d, float r) {
   float b = dot(o, d), c = dot(o, o) - r * r, h = b * b - c;
@@ -144,7 +156,7 @@ void main() {
       float hq = max(length(q) - R0, 0.0);
       lightR += exp(-hq / HR) * lightSegment; lightM += exp(-hq / HM) * lightSegment;
     }
-    vec3 tau = BR * uRayleigh * (depthR + lightR) + BM * uMie * 1.1 * (depthM + lightM);
+    vec3 tau = (BR * uRayleigh + BO) * (depthR + lightR) + BM * uMie * 1.1 * (depthM + lightM);
     vec3 attenuation = exp(-tau);
     sumR += attenuation * hr; sumM += attenuation * hm;
   }
@@ -184,19 +196,162 @@ float fbm(vec2 p) {
   for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(17.1, 5.7); a *= .5; }
   return v;
 }
+float fbmShadow(vec2 p) {
+  float v = 0.0, a = .5;
+  for (int i = 0; i < 3; i++) { v += a * noise(p); p = p * 2.03 + vec2(17.1, 5.7); a *= .5; }
+  return v + .047;
+}
 
-vec3 stars(vec3 dir) {
-  // One candidate star per cell of a direction grid; most cells stay dark.
-  vec2 sph = vec2(atan(dir.x, -dir.z), asin(dir.y)) * 260.0;
-  vec2 cell = floor(sph), f = fract(sph) - .5;
-  float h = hash12(cell);
-  if (h < .955) return vec3(0.0);
-  vec2 offset = vec2(hash12(cell + 7.3), hash12(cell + 3.1)) - .5;
-  float d = length(f - offset * .6);
-  float size = mix(.06, .16, pow(hash12(cell + 1.7), 6.0));
-  float twinkle = .65 + .35 * sin(uTime * (1.3 + h * 3.0) + h * 40.0);
-  vec3 tint = mix(vec3(.75, .85, 1.0), vec3(1.0, .88, .72), hash12(cell + 9.1));
-  return tint * smoothstep(size, 0.0, d) * twinkle * (h - .955) * 22.0;
+// Ultra-slow celestial rotation around a tilted coastal pole (pauses with uTime).
+vec3 skySpin(vec3 d) {
+  float a = uTime * .0022;
+  float c = cos(a), s = sin(a);
+  vec3 p = vec3(d.x, d.y * .85 - d.z * .52, d.y * .52 + d.z * .85);
+  p.xz = mat2(c, -s, s, c) * p.xz;
+  return vec3(p.x, p.y * .85 + p.z * .52, -p.y * .52 + p.z * .85);
+}
+
+// Blackbody-inspired star tint: blue-white, crisp white, warm gold, soft amber.
+vec3 starTint(float h) {
+  if (h < .28) return mix(vec3(.68, .82, 1.0), vec3(.86, .92, 1.0), h / .28);
+  if (h < .68) return mix(vec3(.92, .95, 1.0), vec3(1.0, .96, .88), (h - .28) / .40);
+  return mix(vec3(1.0, .92, .76), vec3(1.0, .74, .52), (h - .68) / .32);
+}
+
+// Tilted Milky Way band with interstellar dark dust rift; fades naturally under moonlight.
+vec4 milkyWay(vec3 sdir, float moonFade) {
+  vec3 galUp = normalize(vec3(.34, .89, .30));
+  vec3 galRight = normalize(cross(vec3(0.0, 1.0, 0.0), galUp));
+  vec3 galFwd = cross(galUp, galRight);
+  float lat = dot(sdir, galUp);
+  float bandMask = exp(-lat * lat * 15.0);
+  if (bandMask < .008) return vec4(0.0);
+  float lon = atan(dot(sdir, galRight), dot(sdir, galFwd));
+  vec2 gUv = vec2(lon * 2.4, lat * 4.2);
+  float cloud1 = fbm(gUv * 2.0 + vec2(3.1, 7.4));
+  float cloud2 = fbmShadow(gUv * 5.6 + vec2(9.3, 4.1));
+  float dust = fbm(gUv * 4.4 + vec2(14.2, 2.8));
+  float riftLat = lat + (dust - .5) * .11;
+  float rift = smoothstep(.32, .64, dust) * exp(-riftLat * riftLat * 105.0);
+  float band = bandMask * smoothstep(.24, .76, cloud1 * .72 + cloud2 * .28);
+  float bulge = exp(-lat * lat * 26.0) * smoothstep(.02, .44, sdir.x) * smoothstep(.32, .05, sdir.y) * smoothstep(.26, .74, cloud1);
+  vec3 col = vec3(.28, .40, .68) * band * (1.0 - rift * .86)
+           + vec3(.68, .55, .46) * bulge * (1.0 - rift * .70);
+  float galactic = clamp(band * (1.0 - rift * .60), 0.0, 1.0);
+  return vec4(col * .115 * moonFade, galactic);
+}
+
+vec3 starLayer(vec2 sph, float scale, float threshold, float minSize, float maxSize, float gain, float elev, float seedShift) {
+  vec2 p = sph * scale + seedShift;
+  vec2 cell = floor(p), f = fract(p) - .5;
+  float h = hash12(cell + seedShift);
+  if (h < threshold) return vec3(0.0);
+  vec2 offset = (vec2(hash12(cell + 7.3 + seedShift), hash12(cell + 3.1 + seedShift)) - .5) * .62;
+  vec2 dv = f - offset;
+  float d = length(dv);
+  float mag = (h - threshold) / (1.0 - threshold);
+  float size = mix(minSize, maxSize, pow(mag, 2.2));
+  // Lower stars scintillate more noticeably through thicker coastal air.
+  float scint = mix(.55, .14, smoothstep(.05, .42, elev));
+  float tw = (1.0 - scint) + scint * (.5 + .5 * sin(uTime * (1.4 + mag * 3.2) + h * 90.0));
+  vec3 tint = starTint(hash12(cell + 19.7 + seedShift));
+  float core = smoothstep(size, size * .12, d);
+  return tint * core * tw * (0.35 + mag * 1.65) * gain;
+}
+
+vec3 stars(vec3 dir, vec3 sdir, float galactic, float moonGlare) {
+  vec2 sph = vec2(atan(sdir.x, -sdir.z), asin(clamp(sdir.y, 0.0, 1.0)));
+  float elev = dir.y;
+  // 1. Dense faint background star dust (enriched inside the Milky Way).
+  float dustThresh = mix(.938, .845, galactic);
+  vec3 faint = starLayer(sph, 370.0, dustThresh, .065, .115, .17, elev, 1.7) * (1.0 - moonGlare * .86);
+  // 2. Mid-magnitude stars with realistic blackbody colors & scintillation.
+  vec3 mid = starLayer(sph, 185.0, .952, .055, .12, .38, elev, 13.4) * (1.0 - moonGlare * .70);
+  // 3. Rare 1st-magnitude anchor stars (~8–11 across the sky) with delicate glow.
+  vec2 p = sph * 42.0 + 37.2;
+  vec2 cell = floor(p), f = fract(p) - .5;
+  float h = hash12(cell + 37.2);
+  vec3 bright = vec3(0.0);
+  if (h > .9915) {
+    vec2 offset = (vec2(hash12(cell + 41.3), hash12(cell + 53.9)) - .5) * .56;
+    vec2 dv = f - offset;
+    float d = length(dv);
+    float mag = (h - .9915) / .0085;
+    float scint = mix(.36, .10, smoothstep(.06, .45, elev));
+    float tw = (1.0 - scint) + scint * (.5 + .5 * sin(uTime * (1.6 + mag * 2.2) + h * 75.0));
+    float core = smoothstep(.052, .008, d);
+    float halo = exp(-d * d / .0026) * .15;
+    float glint = (exp(-abs(dv.x) * 44.0) * exp(-abs(dv.y) * 11.0) + exp(-abs(dv.y) * 44.0) * exp(-abs(dv.x) * 11.0)) * .16 * pow(mag, 1.8);
+    bright = starTint(hash12(cell + 61.1)) * (core + halo + glint) * tw * (.48 + mag * .72) * (1.0 - moonGlare * .45);
+  }
+  return faint + mid + bright;
+}
+
+// Occasional crisp shooting star arcing across the visible night sky (~every 10–14 seconds).
+vec3 meteor(vec3 dir) {
+  if (uTime < .5 || dir.y < .05) return vec3(0.0);
+  float period = 9.5;
+  float slot = floor(uTime / period);
+  float st = fract(uTime / period) * period;
+  if (hash12(vec2(slot + 2.0, 1.37)) > .78) return vec3(0.0);
+  float t0 = 1.4 + hash12(vec2(slot + 2.0, 4.91)) * 5.6;
+  float dur = .62 + hash12(vec2(slot + 2.0, 8.23)) * .34;
+  float p = (st - t0) / dur;
+  if (p <= 0.0 || p >= 1.0) return vec3(0.0);
+
+  vec2 ang = vec2(atan(dir.x, -dir.z), asin(clamp(dir.y, 0.0, 1.0)));
+  vec2 start = vec2(-.44 + hash12(vec2(slot + 2.0, 11.4)) * .80, .20 + hash12(vec2(slot + 2.0, 15.7)) * .15);
+  float sx = start.x > 0.0 ? -1.0 : 1.0;
+  vec2 dir2 = normalize(vec2(sx * (.62 + hash12(vec2(slot + 2.0, 22.3)) * .42), -(.36 + hash12(vec2(slot + 2.0, 26.8)) * .28)));
+  float travel = .18 + hash12(vec2(slot + 2.0, 31.2)) * .14;
+  vec2 head = start + dir2 * (p * travel);
+  float tailLen = .085 + .075 * sin(p * PI);
+  vec2 rel = ang - head;
+  float along = dot(rel, -dir2);
+  if (along < -.025 || along > tailLen) return vec3(0.0);
+  float perp = abs(dot(rel, vec2(-dir2.y, dir2.x)));
+  float tNorm = clamp(along / tailLen, 0.0, 1.0);
+  float w = mix(.00095, .00024, tNorm);
+  float streak = exp(-perp * perp / (w * w)) * pow(1.0 - tNorm, 2.1) * smoothstep(-.0012, .0045, along);
+  float headGlow = exp(-dot(rel, rel) / .0000032);
+  float env = smoothstep(0.0, .14, p) * (1.0 - smoothstep(.52, 1.0, p));
+  vec3 tint = mix(vec3(.98, .99, 1.0), vec3(.58, .88, .98), tNorm);
+  return tint * (streak * .92 + headGlow * 1.15) * env;
+}
+
+// Rare session easter egg: volumetric aurora curtains with vertical magnetic-field-line rays.
+vec3 aurora(vec3 dir, float moonGlare) {
+  if (uAurora <= .001 || dir.y < .03) return vec3(0.0);
+  float horizonMask = smoothstep(.03, .11, dir.y) * (1.0 - smoothstep(.42, .74, dir.y));
+  if (horizonMask <= .001) return vec3(0.0);
+  vec3 sum = vec3(0.0);
+  float invY = 1.0 / max(dir.y, .035);
+  for (int i = 0; i < 18; i++) {
+    float frac = float(i) / 17.0;
+    float H = mix(.38, 1.06, frac);
+    vec2 p = dir.xz * (H * invY);
+    // Primary sinuous curtain sweeping across the open sky + secondary distant arc behind it.
+    float w1 = sin(p.x * .68 + uTime * .11) * .68 + sin(p.x * 1.52 - uTime * .08 + 1.2) * .28;
+    float d1 = abs(p.y + 2.75 + w1);
+    float w2 = sin(p.x * .52 - uTime * .09 + 2.5) * .88 + cos(p.x * 1.18 + uTime * .07) * .30;
+    float d2 = abs(p.y + 4.35 + w2);
+    float ribbon1 = exp(-d1 * d1 * 11.5) + .28 * exp(-d1 * d1 * 2.4);
+    float ribbon2 = (exp(-d2 * d2 * 8.5) + .25 * exp(-d2 * d2 * 1.9)) * .58;
+    float ribbon = ribbon1 + ribbon2;
+    // Fine vertical striations aligned along horizontal ionosphere coordinates (perspective pillars).
+    float fineRays = noise(vec2(p.x * 11.5 + uTime * .07, p.y * 2.4 - uTime * .025));
+    float midRays = fbmShadow(vec2(p.x * 3.4 - uTime * .04, p.y * 1.3 + uTime * .02));
+    float striations = (.22 + .78 * smoothstep(.20, .82, midRays)) * (.35 + .65 * smoothstep(.18, .82, fineRays));
+    float shimmer = .76 + .24 * sin(p.x * 8.5 - uTime * .52 + sin(p.y * 2.6) * 1.8);
+    // Crisp luminous lower oxygen edge fading upward into delicate violet-magenta tips.
+    float vProfile = smoothstep(0.0, .10, frac) * exp(-frac * 2.15);
+    vec3 lowCol = vec3(.12, 1.0, .58);    // 557.7 nm oxygen emerald lower border
+    vec3 midCol = vec3(.10, .74, .90);   // jade-aquamarine mid curtain
+    vec3 highCol = vec3(.66, .22, .92);  // high-altitude violet-rose crown
+    vec3 col = frac < .34 ? mix(lowCol, midCol, frac / .34) : mix(midCol, highCol, (frac - .34) / .66);
+    sum += col * ribbon * striations * shimmer * vProfile;
+  }
+  return sum * .036 * horizonMask * (1.0 - moonGlare * .40) * uAurora;
 }
 
 vec3 disc(vec3 dir) {
@@ -204,29 +359,79 @@ vec3 disc(vec3 dir) {
   float angle = acos(clamp(c, -1.0, 1.0));
   vec3 color = vec3(0.0);
   if (uMoon < .5) {
-    // Limb-darkened photosphere plus a compact aureole; no screen-sized bloom.
+    // Limb-darkened photosphere + tight atmospheric corona behind clouds.
     float r = angle / uDiscSize;
     float limb = r < 1.0 ? pow(max(1.0 - r * r, 0.0), .35) : 0.0;
     float edge = smoothstep(1.0, .92, r);
-    color += uDiscColor * (limb * edge * 60.0);
-    color += uDiscColor * (exp(-angle * 55.0) * 1.6 + exp(-angle * 14.0) * .22) * (1.0 - uOvercast * .85);
+    float low = 1.0 - smoothstep(.0, .24, uSunDir.y);
+    float clearSky = 1.0 - uOvercast * .85;
+    color += uDiscColor * (limb * edge * (85.0 + 420.0 * low));
+    float glowBoost = 1.0 + low * 6.0;
+    float innerCorona = exp(-max(r - .92, 0.0) * 3.1) * 16.0;
+    float aureole = exp(-angle * 24.0) * 3.4 + exp(-angle * 8.5) * .36;
+    float mistSheen = exp(-abs(dir.y - uSunDir.y) * 28.0 - angle * 5.8) * low * 1.15;
+    vec3 warmGlow = mix(uDiscColor, uDiscColor * vec3(1.12, .94, .74), low * .45);
+    color += warmGlow * glowBoost * (innerCorona + aureole + mistSheen) * clearSky;
   } else {
     float r = angle / uDiscSize;
+    vec3 up = abs(uSunDir.y) > .99 ? vec3(1, 0, 0) : vec3(0, 1, 0);
+    vec3 right = normalize(cross(up, uSunDir)), top = cross(uSunDir, right);
+    vec2 q = vec2(dot(dir - uSunDir * c, right), dot(dir - uSunDir * c, top)) / uDiscSize;
+    float phase = uMoonPhase * 2.0 * PI;
+    // Keep a delicate crescent rim even right around astronomical new moon so night is never moonless.
+    if (abs(sin(phase)) < .22 && cos(phase) > 0.0) phase = (sin(phase) < 0.0 ? -.22 : .22);
+    float illum = .5 - .5 * cos(phase);
+    vec3 l = normalize(vec3(sin(phase), .08 * sin(phase), -cos(phase)));
     if (r < 1.0) {
-      // Orthographic view of a lit sphere: the terminator follows the phase.
-      vec3 up = abs(uSunDir.y) > .99 ? vec3(1, 0, 0) : vec3(0, 1, 0);
-      vec3 right = normalize(cross(up, uSunDir)), top = cross(uSunDir, right);
-      vec2 q = vec2(dot(dir - uSunDir * c, right), dot(dir - uSunDir * c, top)) / uDiscSize;
       vec3 n = vec3(q, sqrt(max(1.0 - dot(q, q), 0.0)));
-      float phase = uMoonPhase * 2.0 * PI;
-      vec3 l = normalize(vec3(sin(phase), .12, -cos(phase)));
-      float lit = smoothstep(-.06, .12, dot(n, l));
-      float maria = smoothstep(.45, .7, texture(uNoise, q * 9.0 + 40.0).g) * .35 + texture(uNoise, q * 30.0).b * .12;
-      color += uDiscColor * (lit * (1.0 - maria) * 9.0 + .05) * smoothstep(1.0, .9, r);
+      // Spherical surface coordinates curve naturally towards the limb.
+      vec2 mUv = n.xy / (.72 + n.z * .38);
+      float basin = fbm(mUv * 2.1 + vec2(4.2, 9.7));
+      float detail = fbm(mUv * 6.2 + vec2(19.4, 31.8));
+      float micro = noise(mUv * 18.0 + vec2(53.0, 11.0));
+      float maria = smoothstep(.42, .62, basin + (detail - .5) * .28);
+      float craters = smoothstep(.58, .80, detail) * (1.0 - maria * .45) * .28 + (micro - .5) * .14;
+      // Relief normal perturbation so craters and basin ridges catch grazing light near the terminator.
+      float hx = fbm((mUv + vec2(.055, 0.0)) * 6.2 + vec2(19.4, 31.8)) - detail;
+      float hy = fbm((mUv + vec2(0.0, .055)) * 6.2 + vec2(19.4, 31.8)) - detail;
+      vec3 bumpN = normalize(n + vec3(-hx, -hy, 0.0) * 1.4);
+      float ndl = dot(bumpN, l);
+      float lit = smoothstep(-.035, .055, ndl) * (.52 + .48 * pow(clamp(ndl, 0.0, 1.0), .55));
+      float limb = pow(max(n.z, 0.0), .26);
+      vec3 highlandTint = vec3(1.04, 1.01, .96);
+      vec3 mariaTint = vec3(.52, .57, .68);
+      vec3 albedo = mix(highlandTint, mariaTint, maria) * (.82 + craters) * (.72 + .28 * limb);
+      vec3 surface = lit * albedo * 1.28 + (1.0 - lit) * vec3(.007, .009, .013) * limb;
+      color += uDiscColor * surface * smoothstep(1.0, .93, r);
+    } else {
+      float limbSide = clamp(dot(normalize(q + vec2(1e-5)), l.xy) * .5 + .5, .15, 1.0);
+      float halo = (exp(-(r - 1.0) * 2.8) * .15 * limbSide + exp(-angle * 11.0) * .034) * (.28 + .72 * illum);
+      color += uDiscColor * halo * (1.0 - uOvercast * .7);
     }
-    color += uDiscColor * (exp(-angle * 40.0) * .35 + exp(-angle * 9.0) * .05) * (1.0 - uOvercast * .7);
   }
   return color;
+}
+
+// Forward optical bloom & subtle diffraction corona that veil thin clouds in front of the sun.
+vec3 sunGlare(vec3 dir, float cloudAlpha) {
+  if (uMoon >= .5 || uSunDir.y < -.02) return vec3(0.0);
+  float c = dot(dir, uSunDir);
+  if (c < .5) return vec3(0.0);
+  float angle = acos(clamp(c, -1.0, 1.0));
+  float r = angle / uDiscSize;
+  float low = 1.0 - smoothstep(.0, .24, uSunDir.y);
+  float glowBoost = 1.0 + low * 5.8;
+  float clearSky = (1.0 - uOvercast * .88) * (1.0 - cloudAlpha * .42);
+  vec3 up = abs(uSunDir.y) > .99 ? vec3(1, 0, 0) : vec3(0, 1, 0);
+  vec3 right = normalize(cross(up, uSunDir)), top = cross(uSunDir, right);
+  vec2 q = vec2(dot(dir - uSunDir * c, right), dot(dir - uSunDir * c, top));
+  float phi = atan(q.y, q.x);
+  float rayPattern = pow(.5 + .5 * cos(phi * 6.0 + .35), 8.0) * .55
+                   + pow(.5 + .5 * cos(phi * 10.0 - .8), 10.0) * .35;
+  float rays = rayPattern * exp(-angle * 22.0) * smoothstep(.85, 1.4, r) * 3.8;
+  float bloom = exp(-max(r - .85, 0.0) * 2.4) * 9.5 + exp(-angle * 15.5) * 1.85;
+  vec3 tint = mix(uDiscColor, uDiscColor * vec3(1.12, .95, .76), low * .4);
+  return tint * glowBoost * (bloom + rays) * clearSky * smoothstep(-.01, .015, dir.y);
 }
 
 vec4 clouds(vec3 dir) {
@@ -242,19 +447,26 @@ vec4 clouds(vec3 dir) {
   density *= horizon;
   if (density < .002) return vec4(0.0);
   // Words are written in the deck itself; distant ones dissolve into texture.
-  vec2 glyphUv = p / 210.0 + uCloudOffset * 2.4;
-  float sdf = texture(uCloudGlyphs, glyphUv).b;
-  float edge = clamp(fwidth(sdf) * .75, .015, .5);
-  float ink = smoothstep(.5 - edge, .5 + edge, sdf);
-  // Light that reaches us through the cloud: brighter edges towards the sun.
-  vec2 toLight = normalize(uLightDir.xz + vec2(1e-4)) * .045;
-  float shadow = fbm(q * 3.0 + toLight * 3.0);
-  float thickness = smoothstep(cover, cover + .5, shadow);
-  float forward = pow(max(dot(dir, uLightDir), 0.0), 6.0);
-  vec3 lit = uLightColor * (1.15 - thickness * .75) * (.9 + forward * 3.0) * max(uLightDir.y + .18, .06) * 2.4;
-  vec3 ambient = uAmbient * (1.25 - thickness * .4);
+  float ink = 0.0;
+  if (t < 9000.0) {
+    vec2 glyphUv = p / 210.0 + uCloudOffset * 2.4;
+    float sdf = texture(uCloudGlyphs, glyphUv).b;
+    float edge = clamp(fwidth(sdf) * .75, .015, .5);
+    ink = smoothstep(.5 - edge, .5 + edge, sdf) * smoothstep(9000.0, 7200.0, t);
+  }
+  // Light that reaches us through the cloud: sculpted bases, brighter sunlit ridges and silver linings.
+  vec2 toLight = normalize(uLightDir.xz + vec2(1e-4)) * .055;
+  float shadow = fbmShadow(q * 3.0 + toLight * 3.0);
+  float thickness = smoothstep(cover, cover + .46, shadow);
+  float ridge = clamp((shape - shadow) * 2.8, -.35, .55);
+  float sunAlign = max(dot(dir, uLightDir), 0.0);
+  float forward = pow(sunAlign, 5.0);
+  float silver = pow(sunAlign, 12.0) * exp(-density * 2.1) * smoothstep(.02, .42, density) * (1.0 - uOvercast * .65);
+  float directLift = clamp(1.18 - thickness * .86 + ridge * .55, .16, 1.55);
+  vec3 lit = uLightColor * (directLift * (.85 + forward * 2.6) + silver * 6.5) * max(uLightDir.y + .18, .06) * 2.2;
+  vec3 ambient = uAmbient * mix(1.32, .54, thickness * .72 + density * .22);
   vec3 color = (lit + ambient) * .6 + uFlash * vec3(1.3, 1.4, 1.8) * density;
-  float alpha = density * mix(.34 + uCloudCover * .5, 1.0, ink * uCloudInk);
+  float alpha = density * mix(.38 + uCloudCover * .5, 1.0, ink * uCloudInk);
   // Distant decks melt into the horizon haze.
   float fog = exp(-t * uFogDensity * .22);
   color = mix(hazeColor(dir), color, fog);
@@ -273,11 +485,24 @@ void main() {
   } else {
     color = skyRadiance(dir);
     float night = 1.0 - smoothstep(.02, .25, dot(skyRadiance(vec3(0.0, 1.0, 0.0)), vec3(.333)) * uExposure);
-    float clear = (1.0 - uOvercast) * smoothstep(0.0, .08, dir.y);
-    color += stars(dir) * uStars * night * clear;
+    float clear = (1.0 - uOvercast) * smoothstep(0.0, .06, dir.y);
+    float localDark = 1.0 - smoothstep(.08, .32, dot(color, vec3(.299, .587, .114)) * uExposure);
+    float skyFade = uStars * night * clear * localDark;
+    if (skyFade > .002) {
+      float moonAngle = acos(clamp(dot(dir, uSunDir), -1.0, 1.0));
+      float moonMask = uMoon > .5 ? smoothstep(uDiscSize * .96, uDiscSize * 1.02, moonAngle) : 1.0;
+      float moonIllum = uMoon > .5 ? (.5 - .5 * cos(uMoonPhase * 2.0 * PI)) : 0.0;
+      float moonGlare = uMoon > .5 ? exp(-moonAngle * 4.2) * (.32 + .68 * moonIllum) : 0.0;
+      float mwFade = mix(1.0, .18, moonIllum) * (1.0 - moonGlare * .88) * smoothstep(.04, .20, dir.y);
+      vec3 sdir = skySpin(dir);
+      vec4 mw = milkyWay(sdir, mwFade);
+      color += (mw.rgb + stars(dir, sdir, mw.a, moonGlare) + meteor(dir)) * skyFade * moonMask;
+      color += aurora(dir, moonGlare) * night * (1.0 - uOvercast * .85) * moonMask;
+    }
     color += disc(dir) * smoothstep(-.01, .01, dir.y);
     vec4 cloud = clouds(dir);
     color = mix(color, cloud.rgb, cloud.a);
+    color += sunGlare(dir, cloud.a);
   }
   outColor = vec4(dither(tonemap(color)), 1.0);
 }

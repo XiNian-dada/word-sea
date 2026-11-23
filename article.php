@@ -3,7 +3,7 @@
   <?php
     ob_start();
     $this->content();
-    $wordSeaArticleBody = wordsea_lazy_images(ob_get_clean());
+    $wordSeaArticleBody = wordsea_callouts(wordsea_lazy_images(ob_get_clean()));
     $wordSeaArticleInfo = wordsea_article_info($this, $wordSeaArticleBody, $this->options->wordSeaFreshness);
   ?>
   <div class="article-meta"><?php if ($this->is('post')): ?><time datetime="<?php $this->date('c'); ?>"><?php $this->date('Y.m.d'); ?></time> · <?php $this->category(' / '); ?><?php else: ?><?php echo wordsea_escape($this->options->title); ?><?php endif; ?></div>

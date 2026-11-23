@@ -198,6 +198,176 @@ function wordsea_lazy_images($html)
     }, $html);
 }
 
+function wordsea_callout_block($inner, $types, $icons, $chevron)
+{
+    $trimmed = ltrim($inner);
+    $hasP = (bool) preg_match('/^<p\b[^>]*>(.*?)<\/p>\s*(.*)$/is', $trimmed, $pm);
+    $first = $hasP ? ltrim($pm[1]) : $trimmed;
+    $rest = $hasP ? $pm[2] : '';
+
+    if (!preg_match('/^\[!([a-z]+)\]([+-])?(?=$|\s|<br\b)(.*)$/is', $first, $mm)) {
+        return null;
+    }
+    $key = strtolower($mm[1]);
+    if (!isset($types[$key])) {
+        return null;
+    }
+
+    $meta = $types[$key];
+    $kind = $meta['kind'];
+    $fold = $mm[2];
+    $after = $mm[3];
+    if (preg_match('/^(.*?)(?:<br\s*\/?>|\r?\n)(.*)$/is', $after, $lm)) {
+        $head = trim($lm[1]);
+        $tail = ltrim($lm[2]);
+    } else {
+        $head = trim($after);
+        $tail = '';
+    }
+
+    if ($hasP) {
+        $body = ($tail !== '' ? '<p>' . $tail . '</p>' : '') . trim($rest);
+    } else {
+        $body = trim($tail);
+    }
+
+    if ($body === '' && $head !== '' && $fold === '') {
+        $titleHtml = $meta['label'];
+        $body = '<p>' . $head . '</p>';
+    } else {
+        $titleHtml = $head !== '' ? $head : $meta['label'];
+        if (!$hasP && $body !== '' && !preg_match('/^<(?:p|ul|ol|blockquote|pre|div|table|h[1-6]|hr|details|figure)\b/i', $body)) {
+            $body = '<p>' . $body . '</p>';
+        }
+    }
+
+    $iconHtml = '<span class="callout-icon" aria-hidden="true">' . $icons[$kind] . '</span>';
+    $bodyHtml = $body !== '' ? '<div class="callout-body">' . $body . '</div>' : '';
+    if ($fold !== '') {
+        $openAttr = $fold === '+' ? ' open' : '';
+        return '<details class="callout callout-' . $kind . ' callout-foldable" data-callout="' . $kind . '"' . $openAttr . '>'
+            . '<summary class="callout-title">' . $iconHtml . '<span class="callout-label">' . $titleHtml . '</span>' . $chevron . '</summary>'
+            . $bodyHtml . '</details>';
+    }
+    return '<blockquote class="callout callout-' . $kind . '" data-callout="' . $kind . '">'
+        . '<div class="callout-title">' . $iconHtml . '<span class="callout-label">' . $titleHtml . '</span></div>'
+        . $bodyHtml . '</blockquote>';
+}
+
+/**
+ * Turn GitHub / Obsidian alert blockquotes (`> [!WARNING]`, `> [!NOTE]`, etc.)
+ * into styled semantic callouts while leaving code blocks and regular quotes intact.
+ */
+function wordsea_callouts($html)
+{
+    if (!is_string($html) || stripos($html, '<blockquote') === false || strpos($html, '[!') === false) {
+        return $html;
+    }
+    static $types = [
+        'note'      => ['kind' => 'note',      'label' => '备注'],
+        'info'      => ['kind' => 'note',      'label' => '说明'],
+        'abstract'  => ['kind' => 'note',      'label' => '摘要'],
+        'summary'   => ['kind' => 'note',      'label' => '摘要'],
+        'tip'       => ['kind' => 'tip',       'label' => '提示'],
+        'hint'      => ['kind' => 'tip',       'label' => '提示'],
+        'success'   => ['kind' => 'tip',       'label' => '完成'],
+        'check'     => ['kind' => 'tip',       'label' => '完成'],
+        'done'      => ['kind' => 'tip',       'label' => '完成'],
+        'important' => ['kind' => 'important', 'label' => '重要'],
+        'attention' => ['kind' => 'important', 'label' => '重要'],
+        'warning'   => ['kind' => 'warning',   'label' => '警告'],
+        'warn'      => ['kind' => 'warning',   'label' => '警告'],
+        'caution'   => ['kind' => 'caution',   'label' => '警示'],
+        'danger'    => ['kind' => 'caution',   'label' => '危险'],
+        'error'     => ['kind' => 'caution',   'label' => '错误'],
+        'bug'       => ['kind' => 'caution',   'label' => '故障'],
+        'fail'      => ['kind' => 'caution',   'label' => '失败'],
+        'failure'   => ['kind' => 'caution',   'label' => '失败'],
+    ];
+    static $icons = [
+        'note'      => '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 7.2v3.6"/><circle cx="8" cy="5.1" r=".6" fill="currentColor" stroke="none"/></svg>',
+        'tip'       => '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.2 12.2h3.6M6.8 14h2.4M5.4 10.2c-.8-.8-1.4-1.8-1.4-3.1a4 4 0 1 1 8 0c0 1.3-.6 2.3-1.4 3.1-.4.4-.6.9-.6 1.5v.5H6v-.5c0-.6-.2-1.1-.6-1.5Z"/></svg>',
+        'important' => '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.2 3.2A1.2 1.2 0 0 1 3.4 2h9.2a1.2 1.2 0 0 1 1.2 1.2v6.6a1.2 1.2 0 0 1-1.2 1.2H6.4L3.2 13.6V11h-.2a1.2 1.2 0 0 1-.8-1.2V3.2Z"/><path d="M8 4.8v3"/><circle cx="8" cy="9.55" r=".6" fill="currentColor" stroke="none"/></svg>',
+        'warning'   => '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.15 2.45a1 1 0 0 1 1.7 0l5.3 9.2A1 1 0 0 1 13.3 13.15H2.7a1 1 0 0 1-.85-1.5l5.3-9.2Z"/><path d="M8 6.1v3.2"/><circle cx="8" cy="11.15" r=".6" fill="currentColor" stroke="none"/></svg>',
+        'caution'   => '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.4 2h5.2L14 5.4v5.2L10.6 14H5.4L2 10.6V5.4L5.4 2Z"/><path d="M8 5.2v3.5"/><circle cx="8" cy="10.8" r=".6" fill="currentColor" stroke="none"/></svg>',
+    ];
+    static $chevron = '<svg class="callout-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.25 9.75 8 6 11.75"/></svg>';
+
+    $pattern = '~<(pre|code|script|style)\b[^>]*>.*?</\1\s*>|<blockquote\b[^>]*>|</blockquote>~is';
+    if (!preg_match_all($pattern, $html, $matches, PREG_OFFSET_CAPTURE)) {
+        return $html;
+    }
+
+    $out = '';
+    $cursor = 0;
+    $depth = 0;
+    $openStart = 0;
+    $openTag = '';
+    $innerStart = 0;
+
+    foreach ($matches[0] as $match) {
+        $token = $match[0];
+        $pos = $match[1];
+        $lower = strtolower(substr($token, 0, 13));
+        if (strpos($lower, '<blockquote') === 0) {
+            if ($depth === 0) {
+                $openStart = $pos;
+                $openTag = $token;
+                $innerStart = $pos + strlen($token);
+            }
+            $depth++;
+            continue;
+        }
+        if ($lower === '</blockquote>') {
+            if ($depth === 0) continue;
+            $depth--;
+            if ($depth > 0) continue;
+
+            $out .= substr($html, $cursor, $openStart - $cursor);
+            $inner = wordsea_callouts(substr($html, $innerStart, $pos - $innerStart));
+            $cursor = $pos + strlen($token);
+
+            // Typecho's HyperDown merges adjacent `>` blocks separated only by a blank line into one <blockquote>.
+            // Split top-level `<p>[!TYPE]` boundaries so consecutive callouts render as separate cards.
+            $splits = [];
+            $splitPattern = '~<(pre|code|script|style)\b[^>]*>.*?</\1\s*>|<blockquote\b[^>]*>|</blockquote>|<details\b[^>]*>|</details>|<p\b[^>]*>\s*\[!([a-z]+)\][+-]?(?=$|\s|<br\b)~is';
+            if (preg_match_all($splitPattern, $inner, $sm, PREG_OFFSET_CAPTURE)) {
+                $nest = 0;
+                foreach ($sm[0] as $i => $sMatch) {
+                    $sTok = $sMatch[0];
+                    $sLow = strtolower(substr($sTok, 0, 13));
+                    if (strpos($sLow, '<blockquote') === 0 || strpos($sLow, '<details') === 0) {
+                        $nest++;
+                    } elseif ($sLow === '</blockquote>' || strpos($sLow, '</details>') === 0) {
+                        $nest = max(0, $nest - 1);
+                    } elseif ($nest === 0 && isset($sm[2][$i][0]) && $sm[2][$i][0] !== '' && isset($types[strtolower($sm[2][$i][0])])) {
+                        $splits[] = $sMatch[1];
+                    }
+                }
+            }
+
+            if ($splits && ($splits[0] > 0 || count($splits) > 1)) {
+                $points = $splits[0] > 0 ? array_merge([0], $splits) : $splits;
+                $count = count($points);
+                for ($i = 0; $i < $count; $i++) {
+                    $segStart = $points[$i];
+                    $segEnd = $i + 1 < $count ? $points[$i + 1] : strlen($inner);
+                    $chunk = trim(substr($inner, $segStart, $segEnd - $segStart));
+                    if ($chunk === '') continue;
+                    $block = wordsea_callout_block($chunk, $types, $icons, $chevron);
+                    $out .= $block !== null ? $block : ($openTag . $chunk . $token);
+                }
+            } else {
+                $rendered = wordsea_callout_block($inner, $types, $icons, $chevron);
+                $out .= $rendered !== null ? $rendered : ($openTag . $inner . $token);
+            }
+        }
+    }
+
+    $out .= substr($html, $cursor);
+    return $out;
+}
+
 function wordsea_reading_minutes($html)
 {
     // Estimate rendered text once: CJK characters at 300/min, other words at 200/min.

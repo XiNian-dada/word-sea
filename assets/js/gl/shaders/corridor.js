@@ -59,7 +59,8 @@ void main() {
   dir.xz = mat2(cy, -sy, sy, cy) * dir.xz;
   float side = step(0.0, dir.x);
   vec3 eye = vec3(uEyeX, uDescent, -uTravel);
-  float t = ((side * 2.0 - 1.0) * WALL - eye.x) / dir.x;
+  float denom = abs(dir.x) < 1e-4 ? (side > .5 ? 1e-4 : -1e-4) : dir.x;
+  float t = ((side * 2.0 - 1.0) * WALL - eye.x) / denom;
   vec3 hit = eye + dir * t;
   vec2 uv = wallUv(hit, side);
 
@@ -68,11 +69,15 @@ void main() {
   float ink = carve(uv, packing);
   if (uBlur > 0.0) ink = ink * .5 + (carve(uv + vec2(0.0, uBlur), packing) + carve(uv - vec2(0.0, uBlur), packing)) * .25;
 
-  // Relief: the slope of the distance field tilts the carved surface.
-  vec2 texel = vec2(1.0 / uTile);
-  float slopeX = texture(uQuotes, uv + vec2(texel.x * 1.5, 0.0)).r - texture(uQuotes, uv - vec2(texel.x * 1.5, 0.0)).r;
-  float slopeY = texture(uQuotes, uv + vec2(0.0, texel.y * 1.5)).r - texture(uQuotes, uv - vec2(0.0, texel.y * 1.5)).r;
   float distance = t;
+  // Relief: the slope of the distance field tilts the carved surface.
+  // Skip the four extra texture lookups on empty stone and distant mist where ink is zero.
+  float slopeX = 0.0, slopeY = 0.0;
+  if (ink > 0.005 && distance < 75.0) {
+    vec2 texel = vec2(1.0 / uTile);
+    slopeX = texture(uQuotes, uv + vec2(texel.x * 1.5, 0.0)).r - texture(uQuotes, uv - vec2(texel.x * 1.5, 0.0)).r;
+    slopeY = texture(uQuotes, uv + vec2(0.0, texel.y * 1.5)).r - texture(uQuotes, uv - vec2(0.0, texel.y * 1.5)).r;
+  }
   // Light pours down the corridor from the far end, grazing the walls.
   vec3 toLight = normalize(vec3(-hit.x * .25, .6 - hit.y * .02, -1.0));
   vec3 normal = normalize(vec3(-(side * 2.0 - 1.0), 0.0, 0.0) + vec3(0.0, slopeY, mix(slopeX, -slopeX, side)) * 3.0 * ink);
@@ -80,33 +85,51 @@ void main() {
   float column = .74 + .16 * sin(hit.z * .71 + side * 4.0) + .1 * sin(hit.z * 2.19 + 1.3);
   float stone = .88 + .12 * hash12(floor(uv * vec2(640.0, 320.0)));
 
-  vec3 wall = vec3(.010, .013, .02) * stone;
-  vec3 letter = mix(vec3(.105, .15, .2), vec3(.13, .175, .225), side) * column;
-  letter += uGlow * grazing * .42;
+  vec3 wall = vec3(.012, .016, .025) * stone;
+  vec3 letter = mix(vec3(.135, .19, .255), vec3(.165, .22, .285), side) * column;
+  letter += uGlow * grazing * .52;
 
   float picked = 0.0;
   if (uPickedStrength > 0.0) {
     float id = texture(uQuoteIds, vec2(uv.x, .5)).r * 255.0;
     picked = texture(uPicked, vec2((id + .5) / 256.0, .5)).r;
-    letter = mix(letter, vec3(1.0, .78, .38) * (1.25 + .25 * column) + uGlow * grazing, picked);
+    vec3 gold = vec3(1.0, .82, .36) * (3.2 + .7 * column + grazing * 1.4) + uGlow * grazing * .8;
+    letter = mix(letter, gold, picked);
   }
-  vec3 color = mix(wall, letter * mix(1.0, 1.55, picked), ink);
+  vec3 pickedWall = wall + vec3(.12, .08, .02) * picked * (.25 + .75 * ink);
+  vec3 color = mix(pickedWall, letter * mix(1.0, 2.25, picked), ink);
 
-  // Mist thickens with distance and takes the colour of the far light.
-  float fog = 1.0 - exp(-pow(distance / 30.0, 1.2));
-  vec3 mist = mix(vec3(.045, .06, .08), uGlow * .2, smoothstep(.3, 1.0, fog) * exp(-abs(vNdc.y - uLightNdc.y) * 1.6)) * (1.05 - vNdc.y * .15);
-  color = mix(color, mist, fog * smoothstep(.3, .95, uReveal));
+  // Mist thickens with distance: deep and quiet down the reading channel, softly echoing the sky's time of day.
+  float fog = 1.0 - exp(-pow(distance / 24.0, 1.3));
+  vec3 mist = mix(vec3(.007, .010, .016) + uGlow * .008, uGlow * .085, smoothstep(.32, 1.0, fog) * exp(-abs(vNdc.y - uLightNdc.y) * 1.65)) * (1.02 - vNdc.y * .12);
+  color = mix(color, mist, fog * smoothstep(.3, .95, uReveal) * mix(1.0, .5, picked * ink));
 
-  // The light itself: a small source and a long soft shaft down the corridor.
+  // Soft volumetric glow at the far end of the corridor, avoiding a harsh pinpoint behind the text.
   vec2 lp = vec2((vNdc.x - uLightNdc.x) * uTan.x / uTan.y, vNdc.y - uLightNdc.y);
   float r = length(lp);
-  color += uGlow * (exp(-r * r / .00035) * 1.6 + exp(-r * r / .004) * .25 + exp(-r * r / .05) * .06) * smoothstep(.6, .98, uReveal);
-  float shaft = exp(-abs(lp.x) * 14.0) * smoothstep(.3, -.6, lp.y) * .008;
-  color += uGlow * shaft * smoothstep(.6, .98, uReveal);
-  // Dust drifting through the light.
-  vec2 dustCell = floor(vNdc * vec2(90.0, 56.0) + vec2(0.0, uTime * .6));
-  float dust = step(.997, hash12(dustCell)) * (.5 + .5 * sin(uTime * 2.0 + hash12(dustCell + 3.0) * 20.0));
-  color += uGlow * dust * .12 * exp(-r * 2.5);
+  float revealGlow = smoothstep(.6, .98, uReveal);
+  color += uGlow * (exp(-r * r / .022) * .12 + exp(-r * r / .095) * .045) * revealGlow;
+  float shaft = exp(-abs(lp.x) * 8.5) * smoothstep(.38, -.65, lp.y) * .0045;
+  color += uGlow * shaft * revealGlow;
+
+  // Soft circular bokeh dust motes drifting across two depth layers in the corridor light.
+  float dust = 0.0;
+  vec2 aspectNdc = vec2(vNdc.x * uTan.x / uTan.y, vNdc.y);
+  for (int layer = 0; layer < 2; layer++) {
+    float fl = float(layer);
+    vec2 p = aspectNdc * (13.0 + fl * 9.0) + vec2(sin(uTime * .08 + fl * 2.1) * .4, -uTime * (.14 - fl * .05));
+    vec2 id = floor(p), f = fract(p) - .5;
+    float h = hash12(id + fl * 31.7);
+    if (h > .90) {
+      vec2 offset = (vec2(hash12(id + 7.1 + fl * 5.0), hash12(id + 19.3 + fl * 9.0)) - .5) * .56;
+      offset += vec2(sin(uTime * .6 + h * 40.0), cos(uTime * .45 + h * 29.0)) * .07;
+      float d = length(f - offset);
+      float rad = mix(.045, .095, hash12(id + 41.0)) * (1.0 - fl * .28);
+      float pulse = .55 + .45 * sin(uTime * (1.1 + h * 1.4) + h * 25.0);
+      dust += smoothstep(rad, rad * .12, d) * pulse * (1.0 - fl * .35);
+    }
+  }
+  color += uGlow * dust * .15 * exp(-r * 1.9) * revealGlow;
 
   float vignette = 1.0 - .28 * smoothstep(.4, 1.5, length(vNdc * vec2(.7, .55)));
   color *= vignette;

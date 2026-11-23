@@ -173,7 +173,7 @@ export default function setup() {
       if (next.scene === 'friends') {
         for (const id of ['friend-list', 'friends-foot', 'friends-pagination'])
           document.getElementById(id).innerHTML = doc.getElementById(id).innerHTML;
-        window.wordSea.setFriends(next.friends);
+        window.wordSea.setFriends(next.friends, next.friendsPage);
       }
       document.getElementById('site-footer').innerHTML = doc.getElementById('site-footer').innerHTML;
       replyHolder = null;

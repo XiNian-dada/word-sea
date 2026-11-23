@@ -2,8 +2,8 @@ import { clamp, damp, easeInOut, lerp, smoothstep } from '../core/math.js';
 import { Renderer } from './renderer.js';
 import { World, CRUISE } from './world.js';
 import { Corridor } from './corridor.js';
-import { Particles, Lanterns } from './particles.js';
-import { PRESETS, themeAtHour } from './atmosphere.js';
+import { Particles, Lanterns, Wildlife } from './particles.js';
+import { PRESETS, moonPhaseInfo, themeAtHour } from './atmosphere.js';
 import { buildAtlas } from './atlas.js';
 import { Governor, Pacer } from './pacing.js';
 
@@ -33,7 +33,9 @@ try { renderer = new Renderer(canvas); } catch (error) { fail(error.message); }
 if (renderer) start();
 
 function start() {
-  const requested = new URLSearchParams(location.search).get('theme');
+  const query = new URLSearchParams(location.search);
+  const requested = query.get('theme'), moonParam = query.get('moon'), auroraParam = query.get('aurora');
+  const MOON_ALIASES = { new: 0, crescent: .14, first: .25, 'first-quarter': .25, full: .5, last: .75, 'last-quarter': .75 };
   const selected = requested || config.theme || 'auto';
   const state = {
     automatic: !PRESETS[selected],
@@ -41,14 +43,25 @@ function start() {
     immersive: false, userPaused: false, observation: null, baseWind: config.wind / 100, weatherWind: false,
   };
   const world = new World({ wind: config.wind / 100, density: config.density / 100, theme: state.theme });
+  if (moonParam !== null) {
+    const parsed = moonParam in MOON_ALIASES ? MOON_ALIASES[moonParam] : Number(moonParam);
+    if (Number.isFinite(parsed)) { world.moonPhase = ((parsed % 1) + 1) % 1; }
+  }
+  // Rare night-sky easter egg (~18% per visit; ?aurora=1 or ?aurora=0 overrides for preview).
+  const auroraRoll = auroraParam !== null
+    ? (auroraParam === '1' || auroraParam === 'true' ? 1 : 0)
+    : (Math.random() < .18 ? .78 + Math.random() * .22 : 0);
+  world.aurora = auroraRoll;
+  world.updateAtmosphere();
   world.paused = reducedMotion.matches;
-  const corridor = new Corridor(renderer), particles = new Particles(renderer), lanterns = new Lanterns(renderer);
-  renderer.passes = [particles, lanterns, corridor];
+  const corridor = new Corridor(renderer), particles = new Particles(renderer), lanterns = new Lanterns(renderer), wildlife = new Wildlife(renderer);
+  renderer.passes = [wildlife, particles, lanterns, corridor];
 
   const articleView = $('article-view'), articleScroll = $('article-scroll'), friendsView = $('friends-view');
   const homeUi = [...document.querySelectorAll('[data-home-ui]')];
+  const HARBOR_PAGE_STEP = 44;
   const scene = { target: 0, mix: 0, from: 0, started: 0, duration: 3200, transitioning: false, article: null, scroll: 0, scrollTarget: 0, frames: 0 };
-  const harbor = { target: 0, mix: 0, from: 0, started: 0, duration: 3400, transitioning: false, hover: -1, frames: 0 };
+  const harbor = { target: 0, mix: 0, pageMix: 0, from: 0, page: config.friendsPage || 1, cruise: 0, cruiseFrom: 0, cruiseTarget: CRUISE, paging: false, started: 0, duration: 3400, transitioning: false, hover: -1, frames: 0 };
   let friends = [], nodes = [];
   const quotes = window.wordSeaCollection?.quotes || [];
 
@@ -105,18 +118,25 @@ function start() {
       animating = true;
     }
     if (harbor.transitioning) {
-      const t = clamp((now - harbor.started) / harbor.duration, 0, 1);
-      harbor.mix = lerp(harbor.from, harbor.target, easeInOut(t));
-      if (t === 1) { harbor.mix = harbor.target; harbor.transitioning = false; finishFriends(); }
+      const t = clamp((now - harbor.started) / harbor.duration, 0, 1), e = easeInOut(t);
+      harbor.mix = harbor.paging ? 1 : lerp(harbor.from, harbor.target, e);
+      harbor.cruise = lerp(harbor.cruiseFrom, harbor.cruiseTarget, e);
+      harbor.pageMix = harbor.paging ? e : harbor.mix;
+      if (t === 1) {
+        harbor.mix = harbor.target; harbor.cruise = harbor.cruiseTarget; harbor.pageMix = harbor.target;
+        harbor.transitioning = false; harbor.paging = false; finishFriends();
+      }
       animating = true;
     }
     applyVisuals();
     world.dive = scene.mix;
-    world.cruise = harbor.mix * CRUISE;
+    world.cruise = harbor.cruise;
     const reading = scene.mix >= 1 && !scene.transitioning;
     // While reading, the sea is hidden: hold its clock and only redraw the walls.
-    if (!reading) animating = world.update(dt, { reducedMotion: reducedMotion.matches }) || animating;
-    else {
+    if (!reading) {
+      animating = world.update(dt, { reducedMotion: reducedMotion.matches }) || animating;
+      wildlife.update(world, dt, { reducedMotion: reducedMotion.matches });
+    } else {
       animating = world.updateTheme(dt, { reducedMotion: reducedMotion.matches }) || animating;
       world.updateAtmosphere();
       if (state.immersive && !world.paused && !reducedMotion.matches) {
@@ -154,7 +174,7 @@ function start() {
     const quiet = mix >= 1 && !state.immersive;
     s.look[0] = quiet ? 0 : world.pointer.sx; s.look[1] = quiet ? 0 : world.pointer.sy;
     // Ease the corridor light down as its lettering emerges.
-    corridor.updateLighting(world.preset, lerp(1.05, .28, state.immersive ? 0 : s.reveal));
+    corridor.updateLighting(world.preset, lerp(1.05, .35, state.immersive ? 0 : s.reveal));
     corridor.updateCamera(world.frame.camera, mix, viewport.width / viewport.height);
   }
 
@@ -172,7 +192,7 @@ function start() {
     style(articleView, 'opacity', String(smoothstep(.84, 1, scene.mix)));
     style(friendsView, 'opacity', String(smoothstep(.35, .85, harbor.mix) * (1 - smoothstep(0, .3, scene.mix))));
     // Only the friends' cards read it; set higher up, it would restyle the article every frame.
-    style(friendsView, '--harbor', harbor.mix.toFixed(3));
+    style(friendsView, '--harbor', harbor.pageMix.toFixed(3));
   }
   function syncTransition() { document.body.classList.toggle('scene-transition', scene.transitioning || harbor.transitioning); }
   function label() { root.setAttribute('aria-label', LABELS[scene.target ? 'article' : harbor.target ? 'friends' : 'sea']); }
@@ -227,16 +247,21 @@ function start() {
     if (target === harbor.target) return;
     if (state.immersive) setImmersive(false);
     harbor.hover = -1;
+    harbor.paging = false;
+    const destCruise = target ? CRUISE + (harbor.page - 1) * HARBOR_PAGE_STEP : 0;
     if (target) {
       world.pointer.x = world.pointer.y = 0;
+      harbor.cruiseTarget = destCruise;
       friendsView.hidden = false; friendsView.inert = true; document.body.classList.add('friends-mode'); layoutLanterns();
+    } else {
+      friendsView.inert = true;
+      harbor.cruiseTarget = 0;
     }
-    else friendsView.inert = true;
-    harbor.from = harbor.mix; harbor.target = target; harbor.started = performance.now();
+    harbor.from = harbor.mix; harbor.cruiseFrom = harbor.cruise; harbor.target = target; harbor.started = performance.now();
     harbor.duration = 3400 * Math.max(.3, Math.abs(target - harbor.from));
     harbor.transitioning = animate && !reducedMotion.matches;
     syncTransition(); label();
-    if (!harbor.transitioning) { harbor.mix = target; finishFriends(); }
+    if (!harbor.transitioning) { harbor.mix = target; harbor.pageMix = target; harbor.cruise = harbor.cruiseTarget; finishFriends(); }
     invalidate();
   }
   function setScene(id, animate = true) {
@@ -249,14 +274,31 @@ function start() {
   // ——— Friends' lanterns ———
   const projected = { x: 0, y: 0, w: 1 };
   function layoutLanterns() {
+    const cruise = harbor.target ? harbor.cruiseTarget : CRUISE + (harbor.page - 1) * HARBOR_PAGE_STEP;
     for (const node of nodes) {
-      const p = world.harborPoint(node.friend.at[0], node.friend.at[1]);
+      const p = world.harborPoint(node.friend.at[0], node.friend.at[1], cruise);
       node.x = p.x; node.z = p.z;
     }
   }
-  function bindFriends(data) {
+  function bindFriends(data, page = harbor.page) {
+    const prevPage = harbor.page;
+    harbor.page = Math.max(1, page || 1);
     friends = (data || []).slice(0, 6);
     harbor.hover = -1;
+    if (harbor.target === 1 && harbor.page !== prevPage) {
+      harbor.cruiseFrom = harbor.cruise;
+      harbor.cruiseTarget = CRUISE + (harbor.page - 1) * HARBOR_PAGE_STEP;
+      if (Math.abs(harbor.cruiseTarget - harbor.cruiseFrom) < 1) harbor.cruiseFrom = harbor.cruiseTarget - HARBOR_PAGE_STEP;
+      if (!reducedMotion.matches) {
+        harbor.paging = true; harbor.transitioning = true; harbor.pageMix = 0;
+        harbor.started = performance.now(); harbor.duration = 2200;
+        friendsView.inert = true; syncTransition();
+      } else {
+        harbor.cruise = harbor.cruiseTarget; harbor.pageMix = 1; harbor.paging = false;
+      }
+    } else {
+      harbor.cruiseTarget = harbor.target ? CRUISE + (harbor.page - 1) * HARBOR_PAGE_STEP : 0;
+    }
     const anchors = [...document.querySelectorAll('.friend-link')];
     nodes = friends.map((friend, i) => ({
       friend, i, x: 0, y: 0, z: 0, level: 0, alpha: 0, anchor: anchors[i],
@@ -279,12 +321,16 @@ function start() {
     const sea = world.frame.sea;
     sea.lanterns.fill(0); sea.lanternColors.fill(0);
     const compact = viewport.width <= 1150 || viewport.height <= 650;
+    const progress = harbor.paging ? harbor.pageMix : harbor.mix;
     for (const node of nodes) {
       const target = harbor.hover === node.i ? 1 : 0;
       node.level = reducedMotion.matches ? target : damp(node.level, target, 6, dt);
       if (Math.abs(node.level - target) < 1e-3) node.level = target; else settling = true;
-      node.alpha = smoothstep(.3 + node.i * .05, .75 + node.i * .04, harbor.mix);
-      node.y = world.waterHeight(node.x, node.z) + 2.6;
+      const nearness = clamp((node.friend.at[1] - .6) / .3, 0, 1);
+      const start = (.50 - nearness * .16) + (node.i % 3) * .03;
+      const end = Math.min(.96, start + .36);
+      node.alpha = smoothstep(start, end, progress);
+      node.y = world.waterHeight(node.x, node.z) + lerp(.4, 2.6, node.alpha);
       const strength = (1 + node.level * 1.6) * node.alpha;
       for (let c = 0; c < 3; c++) sea.lanternColors[node.i * 3 + c] = node.color[c] * strength;
       sea.lanterns[node.i * 3] = node.x; sea.lanterns[node.i * 3 + 1] = node.y; sea.lanterns[node.i * 3 + 2] = node.z;
@@ -292,9 +338,9 @@ function start() {
         // Labels stay anchored while the lanterns themselves ride the waves.
         world.project(projected, node.x, 2.6, node.z);
         const right = node.friend.at[0] > .62;
-        const x = clamp(projected.x + (right ? -248 : 26), 16, viewport.width - 236);
+        const x = clamp(projected.x + (right ? -282 : 34), 16, viewport.width - 264);
         style(node.anchor, 'transform', `translate3d(${x.toFixed(1)}px,${(projected.y - 30).toFixed(1)}px,0)`);
-        style(node.anchor, 'opacity', String(node.alpha * smoothstep(.45, .9, harbor.mix)));
+        style(node.anchor, 'opacity', String(node.alpha * smoothstep(.52, .92, progress)));
       } else if (node.anchor) { style(node.anchor, 'transform', ''); style(node.anchor, 'opacity', ''); }
     }
     lanterns.update(nodes);
@@ -315,8 +361,16 @@ function start() {
     invalidate();
   }
   function weatherTheme() {
+    const localHour = new Date().getHours();
     const data = state.observation;
-    if (!data) return themeAtHour(new Date().getHours());
+    if (!data) return themeAtHour(localHour);
+    if (data.timezone) {
+      try {
+        const zoneHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: data.timezone, hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+        const diff = Math.abs((((zoneHour - localHour) % 24) + 36) % 24 - 12);
+        if (diff > 2) return themeAtHour(localHour);
+      } catch {}
+    }
     const now = Date.now() / 1000;
     let rise = NaN, set = NaN, nearest = Infinity;
     for (let i = 0; i < (data.sunrise?.length || 0); i++) {
@@ -347,8 +401,15 @@ function start() {
     document.documentElement.dataset.time = state.theme;
     document.querySelector('meta[name="theme-color"]').content = sky;
     const current = $('theme-current');
-    if (current) current.textContent = PRESETS[state.theme].label + (state.automatic ? ' · 自动' : '');
-    document.querySelector('.themes')?.setAttribute('aria-label', '时段 · ' + PRESETS[state.theme].label + (state.automatic ? ' · 跟随本地时间' : ''));
+    const moon = moonPhaseInfo(world.frame.atmosphere.moonPhase);
+    const phaseText = state.theme === 'night' ? ' · ' + moon.name : '';
+    const nightBtn = document.querySelector('.theme[data-theme="night"]');
+    if (nightBtn) {
+      nightBtn.textContent = state.theme === 'night' ? '月夜 · ' + moon.name : '月夜';
+      nightBtn.title = `月夜 · ${moon.name}（照明 ${moon.illumination}%）`;
+    }
+    if (current) current.textContent = PRESETS[state.theme].label + phaseText + (state.automatic ? ' · 自动' : '');
+    document.querySelector('.themes')?.setAttribute('aria-label', '时段 · ' + PRESETS[state.theme].label + phaseText + (state.automatic ? ' · 跟随本地时间' : ''));
     invalidate();
   }
   function setRange(key, value) {
@@ -449,7 +510,10 @@ function start() {
     if (scene.target) {
       const id = corridor.pick(event.clientX, event.clientY, viewport.width, viewport.height);
       if (id !== null) document.dispatchEvent(new CustomEvent('wordsea:collect', { detail: { kind: 'quote', id } }));
-    } else if (world.rippleAt(event.clientX, event.clientY)) invalidate();
+    } else if (world.rippleAt(event.clientX, event.clientY)) {
+      wildlife.triggerNear(world);
+      invalidate();
+    }
   });
   document.addEventListener('wordsea:quote-picked', event => {
     if (corridor.setPicked(event.detail?.id ?? null, performance.now(), reducedMotion.matches)) invalidate();
@@ -464,7 +528,7 @@ function start() {
     if (reducedMotion.matches) {
       world.pointer.x = world.pointer.y = 0;
       if (scene.transitioning) { scene.mix = scene.target; scene.transitioning = false; finishScene(); }
-      if (harbor.transitioning) { harbor.mix = harbor.target; harbor.transitioning = false; finishFriends(); }
+      if (harbor.transitioning) { harbor.mix = harbor.target; harbor.pageMix = harbor.target; harbor.cruise = harbor.cruiseTarget; harbor.paging = false; harbor.transitioning = false; finishFriends(); }
     }
     invalidate();
   });
@@ -490,7 +554,10 @@ function start() {
       words: SEA_WORDS.length, ripples: world.ripples.length,
       scene: scene.target ? 'article' : harbor.target ? 'friends' : 'sea', article: scene.article,
       transitioning: scene.transitioning || harbor.transitioning, transition: scene.mix, passageFrames: scene.frames,
-      friendsTransition: harbor.mix, travel: harbor.mix * CRUISE, friendHover: harbor.hover, beaconFrames: harbor.frames,
+      friendsTransition: harbor.mix, travel: harbor.cruise, friendHover: harbor.hover, beaconFrames: harbor.frames,
+      moonPhase: moonPhaseInfo(world.frame.atmosphere.moonPhase),
+      aurora: world.aurora > 0,
+      wildlife: { gulls: wildlife.gullCount, leaps: wildlife.activeLeaps },
       weather: state.observation ? { code: state.observation.code, preview: Boolean(state.observation.preview), ...world.weather, wind: world.waveWind } : null,
     }),
   };
@@ -499,7 +566,7 @@ function start() {
   setPaused(world.paused, true);
   setTheme(state.automatic ? 'auto' : state.theme, false);
   setRange('wind', config.wind); setRange('density', config.density);
-  bindFriends(config.friends);
+  bindFriends(config.friends, config.friendsPage);
   measure();
   setScene(config.scene === 'sea' ? null : config.scene, false);
   if (config.scene === 'article') requestQuotes();
