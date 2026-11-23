@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from '../assets/js/scene/world.js';
 import { Corridor } from '../assets/js/scene/corridor.js';
+import { Governor } from '../assets/js/scene/pacing.js';
+import { TIERS, QualityController, atlasSizeFor, detectInitialTier, parseQualityOverride, shouldUseAntialias } from '../assets/js/scene/quality.js';
 import { easeInOut, mat4 } from '../assets/js/core/math.js';
 
 // Camera and picking geometry can be exercised without a WebGL context.
@@ -238,4 +240,71 @@ test('weather maps cloud cover, heaviness, overcast and exposure smoothly', () =
   const storm = applyWeather({ active: 1, cloud: 1, rain: .92, storm: 1 });
   assert.ok(storm.clouds.heaviness > overcast.clouds.heaviness);
   assert.ok(storm.atmosphere.exposure < overcast.atmosphere.exposure);
+});
+
+test('quality detection selects low, medium and high tiers accurately', () => {
+  assert.equal(parseQualityOverride('HIGH'), 2);
+  assert.equal(parseQualityOverride('med'), 1);
+  assert.equal(parseQualityOverride('0'), 0);
+  assert.equal(parseQualityOverride('ultra'), null);
+
+  assert.deepEqual(detectInitialTier({ width: 1440, height: 900, cores: 8, memory: 16, renderer: 'Apple M1 Pro' }), { tier: 2, maxTier: 2, locked: false });
+  assert.deepEqual(detectInitialTier({ coarse: true, width: 390, height: 844, cores: 6, memory: 6 }), { tier: 1, maxTier: 1, locked: false });
+  assert.deepEqual(detectInitialTier({ width: 1280, height: 720, renderer: 'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11)' }), { tier: 1, maxTier: 1, locked: false });
+  assert.deepEqual(detectInitialTier({ width: 1440, height: 900, cores: 2, memory: 4 }), { tier: 0, maxTier: 0, locked: false });
+  assert.deepEqual(detectInitialTier({ width: 1440, height: 900, renderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))' }), { tier: 0, maxTier: 0, locked: false });
+  assert.deepEqual(detectInitialTier({ coarse: true, software: true, override: 2 }), { tier: 2, maxTier: 2, locked: true });
+
+  assert.equal(shouldUseAntialias({ coarse: false, cores: 8, memory: 16 }), true);
+  assert.equal(shouldUseAntialias({ coarse: true, cores: 8, memory: 8 }), false);
+  assert.equal(shouldUseAntialias({ coarse: false, cores: 4, memory: 4 }), false);
+  assert.equal(shouldUseAntialias({ coarse: true, override: 2 }), true);
+  assert.equal(shouldUseAntialias({ coarse: false, cores: 16, override: 0 }), false);
+
+  assert.equal(atlasSizeFor(TIERS[1], { maxTexture: 4096, memory: 4 }), 1024);
+  assert.equal(atlasSizeFor(TIERS[1], { maxTexture: 4096, memory: 8 }), 2048);
+  assert.equal(atlasSizeFor(TIERS[0], { maxTexture: 4096, memory: 16 }), 1024);
+});
+
+test('quality controller and governor downgrade and recover cleanly without bounce', () => {
+  const qc = new QualityController({ tier: 2, maxTier: 2, locked: false });
+  assert.equal(qc.observe('slow-low'), false);
+  assert.equal(qc.tier, 2);
+  assert.equal(qc.observe('slow-low'), true);
+  assert.equal(qc.tier, 1);
+
+  for (let i = 0; i < 5; i++) assert.equal(qc.observe('calm-max'), false);
+  assert.equal(qc.observe('calm-max'), true);
+  assert.equal(qc.tier, 2);
+
+  assert.equal(qc.observe('slow-floor'), true);
+  assert.equal(qc.tier, 1);
+  // Only one climb allowed per session to prevent tier oscillation.
+  for (let i = 0; i < 12; i++) assert.equal(qc.observe('calm-max'), false);
+  assert.equal(qc.tier, 1);
+
+  const locked = new QualityController({ tier: 2, maxTier: 2, locked: true });
+  assert.equal(locked.observe('slow-floor'), false);
+  assert.equal(locked.tier, 2);
+
+  const gov = new Governor({ min: .55 });
+  gov.setMax(1);
+  gov.judge(1000 / 60);
+  assert.equal(gov.consumeEvent(), 'calm-max');
+  assert.equal(gov.consumeEvent(), null);
+
+  gov.judge(26);
+  gov.judge(26);
+  assert.equal(gov.scale, .84);
+  assert.equal(gov.consumeEvent(), null);
+  gov.judge(26);
+  assert.ok(gov.scale < .78);
+  assert.equal(gov.consumeEvent(), 'slow-low');
+
+  // Next step reaches the 0.60 descent floor, and one more slow window emits slow-floor.
+  gov.judge(26);
+  assert.equal(gov.scale, .6);
+  assert.equal(gov.consumeEvent(), 'slow-low');
+  gov.judge(26);
+  assert.equal(gov.consumeEvent(), 'slow-floor');
 });

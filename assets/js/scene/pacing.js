@@ -15,6 +15,12 @@ export class Pacer {
     this.deadline = 0;
   }
 
+  /** Updates target frame interval when tier frame pacing changes. */
+  setInterval(interval) {
+    this.interval = interval;
+    this.deadline = 0;
+  }
+
   /** Whether the frame at `now` should be drawn. */
   due(now) {
     if (now < this.deadline - SLACK) return false;
@@ -46,6 +52,7 @@ export class Governor {
     this.strikes = 0;
     this.trial = null;            // the last change, until the next window judges it
     this.descent = null;          // where the current descent began
+    this.lastEvent = null;
     this.restart();
   }
 
@@ -53,6 +60,28 @@ export class Governor {
   restart() {
     this.start = 0;
     this.frames = 0;
+  }
+
+  /** Updates minimum resolution scale floor without exceeding max ceiling. */
+  setMin(min) {
+    this.min = min;
+    if (this.scale < Math.min(this.min, this.max)) this.scale = Math.min(this.min, this.max);
+  }
+
+  /** Resets expected pace when the frame interval target changes across quality tiers. */
+  setPace(interval) {
+    this.pace = interval;
+    this.trial = this.descent = null;
+    this.strikes = this.calm = 0;
+    this.lastEvent = null;
+    this.restart();
+  }
+
+  /** Returns and clears the latest tier-adjustment hint emitted by `judge()`. */
+  consumeEvent() {
+    const event = this.lastEvent;
+    this.lastEvent = null;
+    return event;
   }
 
   /** Follows a new resolution ceiling; a scale at the ceiling stays there. */
@@ -81,6 +110,7 @@ export class Governor {
   judge(interval) {
     const before = this.scale, trial = this.trial;
     this.trial = null;
+    this.lastEvent = null;
     // Frames faster than the accepted pace mean an earlier cap has lifted.
     if (interval < this.pace) this.pace = Math.max(FRAME_INTERVAL, interval);
     const slow = interval > this.pace * 1.18, calm = interval < this.pace * 1.06;
@@ -97,15 +127,17 @@ export class Governor {
       if (++this.strikes >= 2 || trial || this.descent) {
         this.strikes = 0;
         const descent = this.descent ||= { scale: this.scale, interval };
-        const floor = Math.max(this.min, descent.scale * .6);
+        const floor = Math.max(Math.min(this.min, this.max), descent.scale * .6);
         if (this.scale > floor) {
           this.trial = { lowered: true };
           this.scale = Math.max(floor, this.scale * .84);
+          if (this.scale < this.max * .78) this.lastEvent = 'slow-low';
         } else {
           // A third of the pixels and no faster: the limit lies elsewhere.
           this.scale = descent.scale;
           this.pace = Math.max(this.pace, descent.interval);
           this.descent = null;
+          this.lastEvent = 'slow-floor';
         }
       }
     } else {
@@ -116,6 +148,8 @@ export class Governor {
         this.calm = 0;
         this.trial = { raised: true, from: this.scale };
         this.scale = Math.min(this.max, this.scale * 1.1);
+      } else if (calm && this.scale >= this.max) {
+        this.lastEvent = 'calm-max';
       }
     }
     return this.scale !== before;
