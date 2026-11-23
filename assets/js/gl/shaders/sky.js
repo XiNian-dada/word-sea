@@ -39,8 +39,11 @@ vec3 skyRadiance(vec3 dir) {
   #endif
   // Single scattering leaves a high-sun horizon sallow; light scattered more
   // than once whitens it towards a pale blue haze.
-  float lowSky = (1.0 - smoothstep(0.0, .32, dir.y)) * smoothstep(.08, .5, uLightDir.y);
-  c = mix(c, dot(c, vec3(.2126, .7152, .0722)) * vec3(.9, .98, 1.1), lowSky * .6);
+  float daySun = smoothstep(.08, .5, uLightDir.y);
+  float lowSky = (1.0 - smoothstep(0.0, .24, dir.y)) * daySun;
+  c = mix(c, dot(c, vec3(.2126, .7152, .0722)) * vec3(.86, .96, 1.14), lowSky * .5);
+  // A high sun leaves the open sky a clearer blue above the horizon haze.
+  c *= mix(vec3(1.0), vec3(.9, .97, 1.12), daySun * smoothstep(.04, .3, dir.y));
   // Under moonlight the eye sees in rods: hues fade before the blue shift,
   // so the reddened horizon reads slate rather than olive.
   float scotopic = clamp((uSkyTint.b - 1.0) / .35, 0.0, 1.0);

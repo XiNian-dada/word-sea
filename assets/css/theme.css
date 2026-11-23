@@ -57,7 +57,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
     radial-gradient(50% 38% at 18% 82%, rgb(4 8 15 / .34), transparent 76%),
     radial-gradient(110% 85% at 36% 46%, transparent 38%, rgb(4 7 15 / .48) 100%),
     linear-gradient(90deg, rgb(4 7 15 / .22) 0%, transparent 24%, transparent 52%, rgb(4 7 15 / .46) 82%, rgb(4 7 15 / .58) 100%),
-    linear-gradient(180deg, rgb(4 7 15 / .36) 0%, transparent 20%, transparent 72%, rgb(4 7 15 / .58) 100%);
+    linear-gradient(180deg, rgb(4 7 15 / .26) 0%, transparent 20%, transparent 72%, rgb(4 7 15 / .58) 100%);
 }
 #wordsea-scene:has(.lost-line) .scene-grade {
   background:
