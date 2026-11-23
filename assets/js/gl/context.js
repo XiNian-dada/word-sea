@@ -2,7 +2,7 @@
 
 export function createContext(canvas) {
   const gl = canvas.getContext('webgl2', {
-    alpha: false, antialias: false, depth: true, stencil: false,
+    alpha: false, antialias: true, depth: true, stencil: false,
     premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'default',
     desynchronized: true,
   });
