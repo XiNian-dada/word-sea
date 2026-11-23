@@ -9,17 +9,17 @@ export const PRESETS = {
     gradeShadow: [.92, .96, 1.10], gradeHighlight: [1.06, .98, .94], gradeSat: 1.08, gradeContrast: .18,
   },
   morning: {
-    label: '清晨', light: 'sun', elevation: 9, azimuth: -24, power: 22, rayleigh: 1, mie: 1.25, mieG: .78,
+    label: '清晨', light: 'sun', elevation: 9, azimuth: -24, power: 22, rayleigh: 1, mie: 1.0, mieG: .78,
     exposure: .42, water: [.006, .028, .046], ink: [.85, .95, 1], disc: .0115, stars: 0, fog: .0032, hour: 8,
     gradeShadow: [.94, 1.0, 1.06], gradeHighlight: [1.05, 1.0, .92], gradeSat: 1.05, gradeContrast: .15,
   },
   noon: {
-    label: '正午', light: 'sun', elevation: 34, azimuth: -10, power: 22, rayleigh: 1, mie: .7, mieG: .76,
+    label: '正午', light: 'sun', elevation: 34, azimuth: -10, power: 22, rayleigh: 1, mie: .5, mieG: .76,
     exposure: .34, water: [.004, .032, .055], ink: [.85, .96, 1], disc: .011, stars: 0, fog: .0018, hour: 12,
     gradeShadow: [.92, 1.0, 1.08], gradeHighlight: [1.0, 1.0, 1.02], gradeSat: 1.12, gradeContrast: .14,
   },
   afternoon: {
-    label: '午后', light: 'sun', elevation: 7, azimuth: -16, power: 22, rayleigh: 1, mie: 1.45, mieG: .78,
+    label: '午后', light: 'sun', elevation: 7, azimuth: -16, power: 22, rayleigh: 1, mie: 1.15, mieG: .78,
     exposure: .42, water: [.005, .026, .045], ink: [1, .94, .86], disc: .0115, stars: 0, fog: .003, hour: 15,
     gradeShadow: [.94, .98, 1.06], gradeHighlight: [1.06, .99, .90], gradeSat: 1.06, gradeContrast: .16,
   },

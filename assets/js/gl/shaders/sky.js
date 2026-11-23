@@ -378,10 +378,10 @@ vec3 disc(vec3 dir) {
     float low = 1.0 - smoothstep(.0, .24, uSunDir.y);
     float clearSky = 1.0 - uOvercast * .85;
     color += uDiscColor * (limb * edge * (85.0 + 420.0 * low));
-    float glowBoost = 1.0 + low * 6.0;
+    float glowBoost = 1.0 + low * 2.4;
     float innerCorona = exp(-max(r - .92, 0.0) * 3.1) * 16.0;
-    float aureole = exp(-angle * 24.0) * 3.4 + exp(-angle * 8.5) * .36;
-    float mistSheen = exp(-abs(dir.y - uSunDir.y) * 28.0 - angle * 5.8) * low * 1.15;
+    float aureole = exp(-angle * 30.0) * 2.2 + exp(-angle * 9.0) * .18;
+    float mistSheen = exp(-abs(dir.y - uSunDir.y) * 28.0 - angle * 5.8) * low * .6;
     vec3 warmGlow = mix(uDiscColor, uDiscColor * vec3(1.12, .94, .74), low * .45);
     color += warmGlow * glowBoost * (innerCorona + aureole + mistSheen) * clearSky;
   } else {
@@ -432,7 +432,7 @@ vec3 sunGlare(vec3 dir, float cloudAlpha) {
   float angle = acos(clamp(c, -1.0, 1.0));
   float r = angle / uDiscSize;
   float low = 1.0 - smoothstep(.0, .24, uSunDir.y);
-  float glowBoost = 1.0 + low * 5.8;
+  float glowBoost = 1.0 + low * 2.2;
   float clearSky = (1.0 - uOvercast * .88) * (1.0 - cloudAlpha * .42);
   vec3 up = abs(uSunDir.y) > .99 ? vec3(1, 0, 0) : vec3(0, 1, 0);
   vec3 right = normalize(cross(up, uSunDir)), top = cross(uSunDir, right);
@@ -440,8 +440,8 @@ vec3 sunGlare(vec3 dir, float cloudAlpha) {
   float phi = atan(q.y, q.x);
   float rayPattern = pow(.5 + .5 * cos(phi * 6.0 + .35), 8.0) * .55
                    + pow(.5 + .5 * cos(phi * 10.0 - .8), 10.0) * .35;
-  float rays = rayPattern * exp(-angle * 22.0) * smoothstep(.85, 1.4, r) * 3.8;
-  float bloom = exp(-max(r - .85, 0.0) * 2.4) * 9.5 + exp(-angle * 15.5) * 1.85;
+  float rays = rayPattern * exp(-angle * 22.0) * smoothstep(.85, 1.4, r) * 2.2;
+  float bloom = exp(-max(r - .85, 0.0) * 2.4) * 6.0 + exp(-angle * 20.0) * .9;
   vec3 tint = mix(uDiscColor, uDiscColor * vec3(1.12, .95, .76), low * .4);
   return tint * glowBoost * (bloom + rays) * clearSky * smoothstep(-.01, .015, dir.y);
 }
@@ -476,8 +476,8 @@ vec4 clouds(vec3 dir) {
   float silver = pow(sunAlign, 12.0) * exp(-density * 2.1) * smoothstep(.02, .42, density) * (1.0 - uOvercast * .65);
   float directLift = clamp(1.18 - thickness * .86 + ridge * .55, .16, 1.55);
   vec3 lit = uLightColor * (directLift * (.85 + forward * 2.6) + silver * 6.5) * max(uLightDir.y + .18, .06) * 2.2;
-  vec3 ambient = uAmbient * mix(1.32, .54, thickness * .72 + density * .22);
-  vec3 color = (lit + ambient) * .6 + uFlash * vec3(1.3, 1.4, 1.8) * density;
+  vec3 ambient = uAmbient * mix(1.45, .78, thickness * .72 + density * .22);
+  vec3 color = (lit + ambient) * .68 + uFlash * vec3(1.3, 1.4, 1.8) * density;
   float alpha = density * mix(.38 + uCloudCover * .5, 1.0, ink * uCloudInk);
   // Distant decks melt into the horizon haze.
   float fog = exp(-t * uFogDensity * .22);
