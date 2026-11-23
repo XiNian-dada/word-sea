@@ -95,9 +95,9 @@ void main() {
   float column = .74 + .16 * sin(hit.z * .71 + side * 4.0) + .1 * sin(hit.z * 2.19 + 1.3);
   float stone = .88 + .12 * hash12(floor(uv * vec2(640.0, 320.0)));
 
-  vec3 wall = vec3(.012, .016, .025) * stone;
-  vec3 letter = mix(vec3(.135, .19, .255), vec3(.165, .22, .285), side) * column;
-  letter += uGlow * grazing * .52;
+  vec3 wall = (vec3(.012, .016, .025) + uGlow * .018) * stone;
+  vec3 letter = mix(mix(vec3(.135, .19, .255), vec3(.165, .22, .285), side), uGlow * .26, .35) * column;
+  letter += uGlow * grazing * .6;
 
   float picked = 0.0;
   if (uPickedStrength > 0.0) {
