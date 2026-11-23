@@ -2,12 +2,18 @@ import { DEG, clamp, damp, lerp, mat4, smoothstep } from '../core/math.js';
 import { PRESETS, blendPreset, lightDirection, moonPhase, scatter, transmittance } from './atmosphere.js';
 import { WAVE_COUNT } from './renderer.js';
 
-// Swell directions, wavenumbers, amplitudes, phases and steepness. Long waves
-// carry the shape; short ones add chop. Sum of k·a·Q stays below 1 at full wind.
+// Omnidirectional 8-sector swell basis: 4 primary swells + 4 staggered shorter
+// wind-waves. Fixed basis directions prevent distant phase-swimming while a
+// smooth directional lobe lets visible wave travel follow any 360° wind angle.
 const SWELLS = [
-  [.18, .98, .291, 1.32, 1.1, .34], [-.43, .90, .407, .95, 4.6, .34], [.68, .73, .173, .82, 2.8, .30], [.91, .41, .109, .60, 5.9, .28],
-  [-.80, .60, .557, .40, .6, .26], [.51, .86, .921, .20, 5.2, .22], [-.22, .97, 1.347, .09, 3.5, .18], [-.65, .76, .733, .22, 1.9, .20],
+  [ .26, -.97, .215, 1.36, 1.1, .31], [ .96,  .28, .268, 1.34, 4.6, .31],
+  [-.24,  .97, .312, 1.38, 2.8, .32], [-.97, -.25, .358, 1.32, 5.9, .30],
+  [ .74, -.67, .445,  .90,  .6, .26], [ .69,  .72, .545,  .88, 5.2, .25],
+  [-.73,  .68, .665,  .86, 3.5, .24], [-.70, -.71, .795,  .82, 1.9, .22],
 ];
+
+const INITIAL_WIND_ANGLE = 2.15;
+const swellWeight = along => .14 + .86 * Math.pow(Math.max(along * .5 + .5, 0), 3.2);
 
 const EYE = 6.4;
 export const CRUISE = 64;
@@ -28,6 +34,8 @@ export class World {
     this.pointer = { x: 0, y: 0, sx: 0, sy: 0 };
     this.ripples = [];
     this.cloudOffset = [0, 0];
+    this.detailDrift = [0, 0];
+    this.windWander = { angle: INITIAL_WIND_ANGLE, target: INITIAL_WIND_ANGLE + .52, nextTurn: 18, veer: 0, veerTarget: .18, nextVeer: 14 };
     this.dive = 0;
     this.cruise = 0;
     this.aurora = 0;
@@ -66,7 +74,9 @@ export class World {
         gradeShadow: new Float32Array([1, 1, 1]), gradeHighlight: new Float32Array([1, 1, 1]), gradeSat: 1, gradeContrast: 0,
       },
       sea: {
-        visible: true, waveTime: 0, amplitude: 1, wavesA, wavesB, windDir: new Float32Array([0, -1]), windAlign: 0,
+        visible: true, waveTime: 0, amplitude: 1, wavesA, wavesB,
+        windDir: new Float32Array([Math.sin(INITIAL_WIND_ANGLE), -Math.cos(INITIAL_WIND_ANGLE)]), windAlign: 1,
+        detailDrift: new Float32Array(2),
         ripples: new Float32Array(16), textScale: 26, density, wind, rain: 0, harbor: 0,
         lanterns: new Float32Array(18), lanternColors: new Float32Array(18),
       },
@@ -108,15 +118,14 @@ export class World {
 
   /** Height of the swell (without ripples) at a world point. */
   waterHeight(x, z) {
-    const amplitude = this.frame.sea.amplitude, w = this.weather;
-    const wx = Math.sin(w.angle), wz = -Math.cos(w.angle);
+    const amplitude = this.frame.sea.amplitude;
+    const [wx, wz] = this.frame.sea.windDir;
     // Gerstner points move sideways; two fixed-point steps find the crest above (x, z).
     let px = x, pz = z;
     for (let iteration = 0; iteration < 2; iteration++) {
       let ox = 0, oz = 0;
       for (const s of this.swells) {
-        const along = s.dx * wx + s.dz * wz;
-        const a = s.a * amplitude * lerp(1, .55 + .45 * along * along + .25 * Math.max(along, 0), w.active);
+        const a = s.a * amplitude * swellWeight(s.dx * wx + s.dz * wz);
         const c = Math.cos(s.k * (s.dx * px + s.dz * pz) - Math.sqrt(9.81 * s.k) * this.waveTime + s.phase);
         ox += s.dx * s.q * a * c; oz += s.dz * s.q * a * c;
       }
@@ -124,8 +133,7 @@ export class World {
     }
     let height = 0;
     for (const s of this.swells) {
-      const along = s.dx * wx + s.dz * wz;
-      const a = s.a * amplitude * lerp(1, .55 + .45 * along * along + .25 * Math.max(along, 0), w.active);
+      const a = s.a * amplitude * swellWeight(s.dx * wx + s.dz * wz);
       height += a * Math.sin(s.k * (s.dx * px + s.dz * pz) - Math.sqrt(9.81 * s.k) * this.waveTime + s.phase);
     }
     return height;
@@ -283,14 +291,26 @@ export class World {
     const previousWind = this.waveWind;
     this.waveWind = damp(this.waveWind, this.wind, 1 / 2.4, reducedMotion ? 1e3 : dt);
     if (Math.abs(this.waveWind - this.wind) < 5e-4) this.waveWind = this.wind; else animating = true;
-    const w = this.weather;
+    const w = this.weather, ww = this.windWander;
     if (!this.paused) {
-      // Integrate speed: a new wind never re-times waves that already passed.
-      this.waveTime += dt * (.62 + (previousWind + this.waveWind) * .2);
-      const drift = lerp(1, (.4 + this.waveWind * 2.4) * (Math.sin(w.angle) >= 0 ? 1 : -1), w.active);
-      this.cloudOffset[0] += dt * .0016 * drift;
-      this.cloudOffset[1] += dt * .0004;
+      if (this.time >= ww.nextTurn) {
+        ww.target = ww.angle + (this.random() < .5 ? -1 : 1) * (.55 + this.random() * .85);
+        ww.nextTurn = this.time + 22 + this.random() * 20;
+      }
+      ww.angle += Math.atan2(Math.sin(ww.target - ww.angle), Math.cos(ww.target - ww.angle)) * (1 - Math.exp(-dt / 18));
+      if (this.time >= ww.nextVeer) {
+        ww.veerTarget = (this.random() * 2 - 1) * (.38 + w.storm * .12);
+        ww.nextVeer = this.time + 14 + this.random() * 16;
+      }
+      ww.veer = damp(ww.veer, ww.veerTarget, 1 / 12, dt);
     }
+
+    const weatherAngle = w.angle + ww.veer;
+    const angleDiff = Math.atan2(Math.sin(weatherAngle - ww.angle), Math.cos(weatherAngle - ww.angle));
+    const effAngle = ww.angle + angleDiff * w.active;
+    const wx = Math.sin(effAngle), wz = -Math.cos(effAngle);
+    const gust = 1 + .08 * Math.sin(this.time * .21) * Math.cos(this.time * .13);
+
     this.clouds = damp(this.clouds, this.cloudsTarget, 3, reducedMotion ? 1e3 : dt);
     if (Math.abs(this.clouds - this.cloudsTarget) < 1e-3) this.clouds = this.cloudsTarget; else animating = true;
 
@@ -300,12 +320,11 @@ export class World {
     if (f.atmosphere.flash > 0) animating = true;
 
     const s = f.sea;
-    s.waveTime = this.waveTime;
     s.amplitude = .12 + this.waveWind * .72;
     s.wind = this.waveWind;
     s.density = this.density;
-    s.windDir[0] = Math.sin(w.angle); s.windDir[1] = -Math.cos(w.angle);
-    s.windAlign = w.active;
+    s.windDir[0] = wx; s.windDir[1] = wz;
+    s.windAlign = 1;
     s.rain = w.rain * w.active;
     s.ripples.fill(0);
     // Rings are added in time order, so the expired ones are always first.
@@ -318,19 +337,27 @@ export class World {
     if (this.ripples.length && !this.paused) animating = true;
 
     const c = f.clouds;
-    c.offset[0] = this.cloudOffset[0]; c.offset[1] = this.cloudOffset[1];
-    c.cover = clamp(lerp(.30, w.cloud, w.active), 0, 1);
-    c.heaviness = clamp(w.rain * .65 + w.storm * .55 + Math.max(w.cloud - .82, 0) * 1.4, 0, 1) * w.active;
-    c.enabled = this.clouds;
-
     f.weather.rain = w.rain * w.active;
     f.weather.snow = w.snow * w.active;
     f.weather.windSpeed = (1 + this.waveWind * 9) * w.active;
     if (!this.paused) {
-      // Integrated as well: a gust never throws drops already in the air sideways.
-      f.weather.drift[0] += s.windDir[0] * f.weather.windSpeed * dt;
-      f.weather.drift[1] += s.windDir[1] * f.weather.windSpeed * dt;
+      // Integrate all velocities along +windDir so swells, ripples, clouds, rain and snow align cleanly.
+      const waveStep = dt * (.62 + (previousWind + this.waveWind) * .2) * gust;
+      this.waveTime += waveStep;
+      this.detailDrift[0] += wx * waveStep;
+      this.detailDrift[1] += wz * waveStep;
+      const cloudSpeed = (.0014 + this.waveWind * .0032) * gust;
+      this.cloudOffset[0] += wx * cloudSpeed * dt;
+      this.cloudOffset[1] += wz * cloudSpeed * dt;
+      f.weather.drift[0] += wx * f.weather.windSpeed * gust * dt;
+      f.weather.drift[1] += wz * f.weather.windSpeed * gust * dt;
     }
+    s.waveTime = this.waveTime;
+    s.detailDrift[0] = this.detailDrift[0]; s.detailDrift[1] = this.detailDrift[1];
+    c.offset[0] = this.cloudOffset[0]; c.offset[1] = this.cloudOffset[1];
+    c.cover = clamp(lerp(.30, w.cloud, w.active), 0, 1);
+    c.heaviness = clamp(w.rain * .65 + w.storm * .55 + Math.max(w.cloud - .82, 0) * 1.4, 0, 1) * w.active;
+    c.enabled = this.clouds;
     return animating;
   }
 }

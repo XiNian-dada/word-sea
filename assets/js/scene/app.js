@@ -492,7 +492,8 @@ function start() {
       t.snow = limit(Math.sqrt(Math.max(data.snow || 0, snowy ? .15 : 0)) / 1.7, 0, 1);
       t.fog = [45, 48].includes(code) ? .88 : t.rain * .16 + t.snow * .1;
       t.storm = [95, 96, 97, 99].includes(code) ? 1 : 0;
-      t.angle = limit(data.direction, 0, 360) * Math.PI / 180;
+      // Meteorological wind direction reports where wind blows FROM; scene wind blows TO.
+      t.angle = ((limit(data.direction, 0, 360) + 180) % 360) * Math.PI / 180;
       setRange('wind', limit(.08 + Math.pow(limit(data.wind, 0, 160) / 55, .65) * .83, .04, .98) * 100);
     }
     if (state.automatic) setTheme('auto');
@@ -591,6 +592,7 @@ function start() {
     setFriends: bindFriends,
     getState: () => ({
       theme: PRESETS[state.theme].label, automatic: state.automatic, wind: world.wind, density: world.density,
+      windDir: [+world.frame.sea.windDir[0].toFixed(3), +world.frame.sea.windDir[1].toFixed(3)],
       paused: world.paused, clouds: world.cloudsTarget > .5, time: world.time, frames, scale: +governor.scale.toFixed(2),
       quality: quality.config.name, software, antialias: renderer.caps.antialias,
       words: SEA_WORDS.length, ripples: world.ripples.length,

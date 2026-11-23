@@ -30,9 +30,10 @@ void main() {
   for (int i = 0; i < ${WAVE_COUNT}; i++) {
     vec2 d = uWaveA[i].xy;
     float k = uWaveA[i].z;
-    // Wind feeds swells that travel with it; it never rotates the whole field.
+    // Smooth 360-degree directional lobe focuses swell energy down-wind without rotating fixed wave bases.
     float along = dot(d, uWindDir);
-    float a = uWaveA[i].w * uAmplitude * mix(1.0, .55 + .45 * along * along + .25 * max(along, 0.0), uWindAlign);
+    float dirWeight = .14 + .86 * pow(max(along * .5 + .5, 0.0), 3.2);
+    float a = uWaveA[i].w * uAmplitude * dirWeight;
     float q = uWaveB[i].y;
     float theta = k * dot(d, p) - sqrt(9.81 * k) * uWaveTime + uWaveB[i].x;
     float s = sin(theta), c = cos(theta);
@@ -78,6 +79,7 @@ uniform float uTextScale;
 uniform float uDensity;
 uniform float uWind;
 uniform vec2 uWindDir;
+uniform vec2 uDetailDrift;
 uniform vec3 uInk;
 uniform float uRain;
 uniform float uDetailLevel;
@@ -109,10 +111,9 @@ void main() {
   vec3 V = toCamera / distance;
   // Fine detail would alias in the distance; it hands over to rougher glitter.
   float near = exp(-distance * .018);
-  vec2 drift = uWindDir * uWaveTime;
-  vec2 d0 = texture(uDetail, vWorld.xz * .061 + drift * .021).xy * 2.0 - 1.0;
+  vec2 d0 = texture(uDetail, vWorld.xz * .061 - uDetailDrift * .021).xy * 2.0 - 1.0;
   vec2 d1 = uDetailLevel > .5 && distance < 260.0
-    ? texture(uDetail, vWorld.xz * .157 - vec2(drift.y, -drift.x) * .037).xy * 2.0 - 1.0
+    ? texture(uDetail, vWorld.xz * .157 - uDetailDrift * .037 - vec2(-uDetailDrift.y, uDetailDrift.x) * .012).xy * 2.0 - 1.0
     : vec2(0.0);
   vec2 detail = d0 * .62 + d1 * .38;
   float chop = clamp(length(d0 * .55 + d1 * .95) * .85, 0.0, 1.0);

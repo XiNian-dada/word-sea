@@ -149,7 +149,7 @@ export class Renderer {
     this.shareAtmosphere(p, frame);
     p.set('uViewProj', cam.viewProj).set('uCamera', cam.eye).set('uGridOrigin', cam.gridOrigin)
       .set('uTime', frame.time).set('uWaveTime', s.waveTime).set('uAmplitude', s.amplitude)
-      .set('uWaveA', s.wavesA).set('uWaveB', s.wavesB).set('uWindDir', s.windDir).set('uWindAlign', s.windAlign)
+      .set('uWaveA', s.wavesA).set('uWaveB', s.wavesB).set('uWindDir', s.windDir).set('uWindAlign', s.windAlign).set('uDetailDrift', s.detailDrift)
       .set('uRipples', s.ripples).set('uTextScale', s.textScale).set('uDensity', s.density).set('uWind', s.wind)
       .set('uWaterDeep', frame.atmosphere.water).set('uInk', frame.atmosphere.ink).set('uRain', s.rain).set('uDetailLevel', this.quality.oceanDetail)
       .set('uUnderwater', cam.underwater ? 1 : 0).set('uHarbor', s.harbor)
@@ -168,7 +168,7 @@ export class Renderer {
     p.set('uInvViewProj', frame.camera.invViewProj).set('uCamera', frame.camera.eye).set('uTime', frame.time)
       .set('uSunDir', a.discDir).set('uDiscColor', a.discColor).set('uDiscSize', a.discSize)
       .set('uMoon', a.moon).set('uMoonPhase', a.moonPhase).set('uStars', a.stars)
-      .set('uCloudOffset', c.offset).set('uCloudCover', c.cover).set('uCloudHeaviness', c.heaviness).set('uCloudQuality', this.quality.cloudQuality).set('uCloudInk', c.ink).set('uClouds', c.enabled)
+      .set('uCloudOffset', c.offset).set('uWindDir', frame.sea.windDir).set('uCloudCover', c.cover).set('uCloudHeaviness', c.heaviness).set('uCloudQuality', this.quality.cloudQuality).set('uCloudInk', c.ink).set('uClouds', c.enabled)
       .set('uUnderwater', frame.camera.underwater ? 1 : 0).set('uWaterDeep', a.water)
       .texture('uNoise', this.textures.noise).texture('uCloudGlyphs', this.textures.glyphs);
     // Only pixels the sea did not cover still hold the far depth.

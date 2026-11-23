@@ -308,3 +308,74 @@ test('quality controller and governor downgrade and recover cleanly without boun
   gov.judge(26);
   assert.equal(gov.consumeEvent(), 'slow-floor');
 });
+
+test('detail ripples, clouds and precipitation drift coherently along windDir', () => {
+  const dot = (ax, az, bx, bz) => {
+    const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+    assert.ok(la > 0 && lb > 0);
+    return (ax * bx + az * bz) / (la * lb);
+  };
+  for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2, 235 * Math.PI / 180]) {
+    const world = new World({ wind: .6, theme: 'noon' });
+    Object.assign(world.weatherTarget, { active: 1, cloud: .6, rain: .5, angle });
+    world.update(1 / 60, { reducedMotion: true });
+    const prevDetail = [...world.frame.sea.detailDrift];
+    const prevCloud = [...world.frame.clouds.offset];
+    const prevWeather = [...world.frame.weather.drift];
+    world.update(1 / 60);
+    const [wx, wz] = world.frame.sea.windDir;
+    assert.ok(Math.abs(Math.hypot(wx, wz) - 1) < 1e-5);
+    assert.ok(dot(world.frame.sea.detailDrift[0] - prevDetail[0], world.frame.sea.detailDrift[1] - prevDetail[1], wx, wz) > .99);
+    assert.ok(dot(world.frame.clouds.offset[0] - prevCloud[0], world.frame.clouds.offset[1] - prevCloud[1], wx, wz) > .99);
+    assert.ok(dot(world.frame.weather.drift[0] - prevWeather[0], world.frame.weather.drift[1] - prevWeather[1], wx, wz) > .99);
+  }
+});
+
+test('wind wanders slowly and freezes completely when paused', () => {
+  for (const active of [0, 1]) {
+    const world = new World({ wind: .45, theme: 'noon' });
+    if (active) world.weatherTarget.active = 1;
+    world.update(1 / 60, { reducedMotion: true });
+    let prev = [...world.frame.sea.windDir];
+    let minDot = 1, maxStepAngle = 0;
+    for (let i = 0; i < 1800; i++) {
+      world.update(1 / 60);
+      const cur = world.frame.sea.windDir;
+      const stepDot = Math.max(-1, Math.min(1, cur[0] * prev[0] + cur[1] * prev[1]));
+      maxStepAngle = Math.max(maxStepAngle, Math.acos(stepDot) * 180 / Math.PI);
+      prev = [...cur];
+      if (i === 0) continue;
+      minDot = Math.min(minDot, cur[0] * Math.sin(active ? world.weather.angle : 2.15) - cur[1] * Math.cos(active ? world.weather.angle : 2.15));
+    }
+    assert.ok(Math.acos(Math.max(-1, Math.min(1, minDot))) * 180 / Math.PI > 5, 'wind should wander gently over 30s');
+    assert.ok(maxStepAngle < .5, 'wind turn per frame must stay gradual');
+
+    const frozen = [...world.frame.sea.windDir], frozenDetail = [...world.frame.sea.detailDrift];
+    world.paused = true;
+    for (let i = 0; i < 120; i++) world.update(1 / 60);
+    assert.deepEqual([...world.frame.sea.windDir], frozen);
+    assert.deepEqual([...world.frame.sea.detailDrift], frozenDetail);
+  }
+});
+
+test('360-degree wind keeps ocean swell energy balanced across orthogonal angles', () => {
+  const rmsHeights = [];
+  for (const angle of [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2]) {
+    const world = new World({ wind: .6, theme: 'noon' });
+    world.weatherTarget.active = 1;
+    world.weatherTarget.angle = angle;
+    world.update(1 / 60, { reducedMotion: true });
+    let sumSq = 0, count = 0;
+    for (let t = 0; t < 20; t += 2) {
+      world.waveTime = t;
+      for (let x = -18; x <= 18; x += 6) for (let z = -36; z <= 0; z += 6) {
+        const h = world.waterHeight(x, z);
+        sumSq += h * h;
+        count++;
+      }
+    }
+    rmsHeights.push(Math.sqrt(sumSq / count));
+  }
+  const ratio = Math.max(...rmsHeights) / Math.min(...rmsHeights);
+  assert.ok(ratio < 1.35, `expected balanced 360-degree swell energy, got ratio ${ratio.toFixed(3)}`);
+});

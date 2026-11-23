@@ -197,6 +197,7 @@ uniform float uStars;
 uniform sampler2D uNoise;
 uniform sampler2D uCloudGlyphs;
 uniform vec2 uCloudOffset;
+uniform vec2 uWindDir;
 uniform float uCloudCover;
 uniform float uCloudHeaviness;
 uniform float uCloudQuality;
@@ -505,7 +506,7 @@ vec4 clouds(vec3 dir) {
     float sigmaExt = mix(.0046, .0062, stratus);
     float sigmaLight = .0078;
     float hor2 = 1.0 - dir.y * dir.y;
-    vec2 windShear = normalize(uLightDir.xz + vec2(1e-4)) * 140.0;
+    vec2 windShear = uWindDir * 140.0;
     float domeScale = mix(.22, .05, stratus);
     float botEdge = mix(.30, .15, stratus);
     float topEdge = mix(.26, .58, stratus);
@@ -525,18 +526,18 @@ vec4 clouds(vec3 dir) {
       float tLow = cloudShellDist(dir.y, uCamera.y, Rc, H0 + H_THICK * h);
       if (tLow < tMax) {
         vec3 pos = uCamera + dir * tLow;
-        vec2 pMac = macroRot * ((pos.xz + windOffset + windShear * h) / 10500.0);
+        vec2 pMac = macroRot * ((pos.xz - windOffset - windShear * h) / 10500.0);
         float macro = textureLod(uNoise, pMac, .6).b;
         float effThresh = thresh + domeScale * .35;
         float base = clamp((macro - effThresh) / max(1.0 - effThresh, .28), 0.0, 1.0);
         if (base > .004) {
-          vec2 pDet = detRot * ((pos.xz + windOffset + windShear * (h * .85)) / 5200.0);
+          vec2 pDet = detRot * ((pos.xz - windOffset - windShear * (h * .85)) / 5200.0);
           vec2 ba = textureLod(uNoise, pDet, .9).ba;
           float billow = ba.y * .72 + ba.x * .28;
           float dens = max(base - (1.0 - billow) * erodeAmt * (1.0 - base * .62), 0.0);
           dens = mix(dens, base * (.42 + billow * .92), stratus * .62) * densGain;
           if (dens > .003) {
-            vec2 pL = macroRot * ((pos.xz + lDir.xz * 380.0 + windOffset + windShear * .65) / 10500.0);
+            vec2 pL = macroRot * ((pos.xz + lDir.xz * 380.0 - windOffset - windShear * .65) / 10500.0);
             float mL = textureLod(uNoise, pL, .8).b;
             float dL = max(mL - thresh - domeScale * .65, 0.0);
             float optLight = (dL * 620.0 + stratus * (.35 + (1.0 - billow) * .35) * .65 * 180.0) * sigmaLight * mix(.85, 1.45, uCloudHeaviness);
@@ -577,7 +578,7 @@ vec4 clouds(vec3 dir) {
           float alt = pos.y + (t * t * hor2) / (2.0 * Rc);
           float h = clamp((alt - H0) / H_THICK, 0.0, 1.0);
 
-          vec2 pMac = macroRot * ((pos.xz + windOffset + windShear * h) / 10500.0);
+          vec2 pMac = macroRot * ((pos.xz - windOffset - windShear * h) / 10500.0);
           float macro = textureLod(uNoise, pMac, macLod).b;
           float domeBias = domeScale * smoothstep(.18, 1.0, h);
           float effThresh = thresh + domeBias;
@@ -586,11 +587,11 @@ vec4 clouds(vec3 dir) {
             float top = smoothstep(1.0, topEdge, h);
             float base = clamp((macro - effThresh) / max(1.0 - effThresh, .28), 0.0, 1.0) * bottom * top;
             if (base > .004) {
-              vec2 pDet = detRot * ((pos.xz + windOffset + windShear * (h * .85)) / 5200.0);
+              vec2 pDet = detRot * ((pos.xz - windOffset - windShear * (h * .85)) / 5200.0);
               vec2 ba = textureLod(uNoise, pDet, detLod).ba;
               float billow = ba.y * .72 + ba.x * .28;
               if (!med) {
-                float d3 = noise3(vec3((pos.xz + windOffset * 1.15) * .0055, h * 4.5 + uTime * .04));
+                float d3 = noise3(vec3((pos.xz - windOffset * 1.15) * .0055, h * 4.5 + uTime * .04));
                 billow = mix(billow, ba.y * .60 + ba.x * .20 + d3 * .20, d3Weight);
               }
               float dens = max(base - (1.0 - billow) * erodeAmt * (1.0 - base * .62), 0.0);
@@ -602,20 +603,20 @@ vec4 clouds(vec3 dir) {
                   vec3 pL1 = pos + lDir * 340.0;
                   vec2 r1 = pL1.xz - uCamera.xz;
                   float hL1 = clamp((pL1.y + dot(r1, r1) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
-                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz + windOffset + windShear * hL1) / 10500.0), macLod).b;
+                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz - windOffset - windShear * hL1) / 10500.0), macLod).b;
                   float dL1 = max(mL1 - thresh - domeScale * smoothstep(.18, 1.0, hL1), 0.0) * smoothstep(0.0, .12, hL1) * smoothstep(1.0, .25, hL1);
                   shadowDist = dL1 * 620.0;
                 } else {
                   vec3 pL1 = pos + lDir * 200.0;
                   vec2 r1 = pL1.xz - uCamera.xz;
                   float hL1 = clamp((pL1.y + dot(r1, r1) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
-                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz + windOffset + windShear * hL1) / 10500.0), macLod).b;
+                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz - windOffset - windShear * hL1) / 10500.0), macLod).b;
                   float dL1 = max(mL1 - thresh - domeScale * smoothstep(.18, 1.0, hL1), 0.0) * smoothstep(0.0, .12, hL1) * smoothstep(1.0, .25, hL1);
 
                   vec3 pL2 = pos + lDir * 600.0;
                   vec2 r2 = pL2.xz - uCamera.xz;
                   float hL2 = clamp((pL2.y + dot(r2, r2) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
-                  float mL2 = textureLod(uNoise, macroRot * ((pL2.xz + windOffset + windShear * hL2) / 10500.0), macLod).b;
+                  float mL2 = textureLod(uNoise, macroRot * ((pL2.xz - windOffset - windShear * hL2) / 10500.0), macLod).b;
                   float dL2 = max(mL2 - thresh - domeScale * smoothstep(.18, 1.0, hL2), 0.0) * smoothstep(0.0, .12, hL2) * smoothstep(1.0, .25, hL2);
                   shadowDist = dL1 * 220.0 + dL2 * 440.0;
                 }
@@ -655,7 +656,7 @@ vec4 clouds(vec3 dir) {
     float avgDist = hitDist / hitW;
     if (avgDist < 11000.0 && uCloudInk > .01) {
       vec3 pHit = hitPos / hitW;
-      vec2 glyphUv = pHit.xz / 340.0 + uCloudOffset * 2.4;
+      vec2 glyphUv = (pHit.xz - windOffset) / 340.0;
       float lod = clamp(log2(max(avgDist / 1600.0, 1.0)), 0.0, 3.5);
       float sdf = textureLod(uCloudGlyphs, glyphUv, lod).b;
       float edge = clamp(.035 + avgDist * .000025, .035, .32);
@@ -678,7 +679,7 @@ vec4 clouds(vec3 dir) {
     if (cirrusVis > .005) {
       float tC = cloudShellDist(dir.y, uCamera.y, Rc, 5800.0);
       const mat2 cirRot = mat2(.94, -.34, .34, .94);
-      vec2 pC = cirRot * (uCamera.xz + dir.xz * tC + windOffset * .42);
+      vec2 pC = cirRot * (uCamera.xz + dir.xz * tC - windOffset * .42);
       float cBase = textureLod(uNoise, pC * vec2(1.0, .28) / 26000.0, 0.0).b;
       float cFil = textureLod(uNoise, pC * vec2(1.0, .35) / 9500.0 + vec2(cBase * .12, -.06), 0.0).a;
       float cirrus = smoothstep(.56, .88, cBase * .72 + cFil * .28)
