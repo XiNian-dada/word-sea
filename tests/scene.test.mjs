@@ -208,3 +208,34 @@ test('both inward wall faces read atlas columns from left to right', () => {
     assert.deepEqual(screenX.map(x => corridor.pick(x, height / 2, width, height)), ids);
   }
 });
+
+test('weather maps cloud cover, heaviness, overcast and exposure smoothly', () => {
+  const applyWeather = (patch = {}) => {
+    const world = new World({ theme: 'noon' });
+    Object.assign(world.weatherTarget, { active: 0, cloud: 0, rain: 0, snow: 0, fog: 0, storm: 0, angle: 0 }, patch);
+    world.update(1 / 60, { reducedMotion: true });
+    return world.frame;
+  };
+
+  const off = applyWeather();
+  assert.ok(Math.abs(off.clouds.cover - .30) < 1e-6);
+  assert.equal(off.clouds.heaviness, 0);
+  assert.equal(off.atmosphere.overcast, 0);
+
+  const clear = applyWeather({ active: 1, cloud: .03 });
+  assert.ok(clear.clouds.cover < .05);
+  assert.equal(clear.atmosphere.overcast, 0);
+
+  const cloudy = applyWeather({ active: 1, cloud: .65 });
+  assert.ok(Math.abs(cloudy.clouds.cover - .65) < 1e-6);
+  assert.ok(cloudy.atmosphere.overcast < .2);
+  assert.ok(cloudy.atmosphere.discColor[0] > .2);
+
+  const fog = applyWeather({ active: 1, cloud: .94, fog: .88 });
+  assert.ok(fog.clouds.cover > .9);
+
+  const overcast = applyWeather({ active: 1, cloud: 1 });
+  const storm = applyWeather({ active: 1, cloud: 1, rain: .92, storm: 1 });
+  assert.ok(storm.clouds.heaviness > overcast.clouds.heaviness);
+  assert.ok(storm.atmosphere.exposure < overcast.atmosphere.exposure);
+});

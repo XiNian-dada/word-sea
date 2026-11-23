@@ -70,7 +70,7 @@ export class World {
         ripples: new Float32Array(16), textScale: 26, density, wind, rain: 0, harbor: 0,
         lanterns: new Float32Array(18), lanternColors: new Float32Array(18),
       },
-      clouds: { offset: new Float32Array(2), cover: 0, ink: 1, enabled: 1 },
+      clouds: { offset: new Float32Array(2), cover: .3, heaviness: 0, ink: 1, enabled: 1 },
       weather: { rain: 0, snow: 0, windSpeed: 0, drift: [0, 0] },
     };
     this.viewport = { width: 1, height: 1 };
@@ -216,14 +216,15 @@ export class World {
       for (let i = 0; i < 3; i++) { a.ambient[i] *= tint[i]; a.lightColor[i] *= tint[i] * .8 + .2; }
     }
     const cover = w.cloud * w.active, fog = w.fog * w.active;
-    a.overcast = clamp(Math.max(cover - .35, 0) * 1.35 + fog * .5 + w.storm * w.active * .3, 0, .96);
-    a.exposure = p.exposure * (1 + a.overcast * .25);
-    a.fog = p.fog * (1 + fog * 9 + w.rain * w.active * 2.5);
+    const rain = w.rain * w.active, storm = w.storm * w.active;
+    a.overcast = clamp(smoothstep(.55, .98, cover) * .74 + fog * .48 + rain * .16 + storm * .22, 0, .94);
+    a.exposure = p.exposure * (1 + a.overcast * .08 - storm * .14);
+    a.fog = p.fog * (1 + fog * 9 + rain * 2.5);
     a.discDir.set(a.lightDir);
     a.discSize = p.disc;
     // During a day ↔ night change the old disc sets before the new one rises.
     const swap = Math.abs(night * 2 - 1);
-    const shade = Math.pow(1 - clamp(cover * 1.05 + fog * .7, 0, 1), 3);
+    const shade = Math.pow(1 - clamp(a.overcast * .85 + fog * .45, 0, 1), 2);
     const moon = p.light === 'moon';
     for (let i = 0; i < 3; i++) a.discColor[i] = a.lightColor[i] / Math.max(p.power, 1e-3) * swap * shade * (moon ? .9 : p.power / 22);
     a.moon = moon ? 1 : 0;
@@ -318,7 +319,8 @@ export class World {
 
     const c = f.clouds;
     c.offset[0] = this.cloudOffset[0]; c.offset[1] = this.cloudOffset[1];
-    c.cover = clamp(.38 + w.cloud * w.active * .62, 0, 1) * (1 - w.fog * w.active * .4);
+    c.cover = clamp(lerp(.30, w.cloud, w.active), 0, 1);
+    c.heaviness = clamp(w.rain * .65 + w.storm * .55 + Math.max(w.cloud - .82, 0) * 1.4, 0, 1) * w.active;
     c.enabled = this.clouds;
 
     f.weather.rain = w.rain * w.active;
