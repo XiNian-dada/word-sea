@@ -160,6 +160,7 @@ export class Particles {
   constructor(renderer, count = 6000) {
     const gl = renderer.gl;
     this.gl = gl;
+    this.maxCount = count;
     this.count = count;
     this.program = new Program(gl, { vertex: PARTICLE_VERTEX, fragment: PARTICLE_FRAGMENT, label: 'particles' });
     const seeds = new Float32Array(count * 4);
@@ -176,6 +177,10 @@ export class Particles {
     this.color = new Float32Array(3);
     this.wind = new Float32Array(2);
     this.drift = new Float32Array(2);
+  }
+
+  setBudget(count) {
+    this.count = Math.min(this.maxCount, Math.max(0, Math.round(count)));
   }
 
   draw(frame, renderer) {

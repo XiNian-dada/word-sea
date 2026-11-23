@@ -812,6 +812,18 @@ body:not(.effects-ready) .friend-link { position: relative; width: auto; opacity
   /* A tap leaves :hover behind; keep the list still instead of half-shifted. */
   .story-link:hover :is(.story-title, .story-meta) { transform: none; }
 }
+body.low-power {
+  --blur: none;
+  --blur-soft: none;
+  --glass: rgb(10 16 26 / .62);
+  --glass-hover: rgb(14 22 36 / .74);
+  --glass-strong: rgb(10 14 24 / .94);
+}
+body.low-power .friend-link {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--lamp) 12%, rgb(8 12 22 / .72)), rgb(8 12 22 / .64));
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }

@@ -6,6 +6,7 @@ import { Particles, Lanterns, Wildlife } from './particles.js';
 import { PRESETS, moonPhaseInfo, themeAtHour } from './atmosphere.js';
 import { buildAtlas } from './atlas.js';
 import { Governor, Pacer } from './pacing.js';
+import { QualityController, atlasSizeFor, detectInitialTier, isSoftwareRenderer, parseQualityOverride, shouldUseAntialias } from './quality.js';
 
 const SEA_WORDS = ['海', 'sea', 'mer', 'mar', 'Meer', 'mare', 'море', 'θάλασσα', 'بحر', 'ים', 'समुद्र', 'সমুদ্র', 'கடல்', 'సముద్రం', 'ทะเล', 'biển', '바다', 'laut', 'deniz', 'bahari', 'havet', 'meri', 'sjór', 'muir'];
 const CLOUD_WORDS = ['云', '雲', 'cloud', 'nuage', 'nube', 'Wolke', 'nuvola', 'облако', 'سحابة', 'ענן', 'बादल', 'মেঘ', 'மேகம்', 'เมฆ', 'mây', '구름', 'awan', 'bulut', 'wingu', 'moln', 'pilvi', 'ský', 'scamall'];
@@ -27,14 +28,33 @@ function fail(message) {
   if (message) console.warn(message);
 }
 
+const query = new URLSearchParams(location.search);
+const qualityOverride = parseQualityOverride(query.get('quality'));
+const antialias = shouldUseAntialias({
+  coarse: coarse.matches,
+  cores: navigator.hardwareConcurrency,
+  memory: navigator.deviceMemory,
+  override: qualityOverride,
+});
+
 let renderer = null;
-try { renderer = new Renderer(canvas); } catch (error) { fail(error.message); }
+try { renderer = new Renderer(canvas, { antialias }); } catch (error) { fail(error.message); }
 
 if (renderer) start();
 
 function start() {
-  const query = new URLSearchParams(location.search);
   const requested = query.get('theme'), moonParam = query.get('moon'), auroraParam = query.get('aurora');
+  const software = isSoftwareRenderer(renderer.caps.renderer);
+  const quality = new QualityController(detectInitialTier({
+    coarse: coarse.matches,
+    width: root.clientWidth || innerWidth,
+    height: root.clientHeight || innerHeight,
+    cores: navigator.hardwareConcurrency,
+    memory: navigator.deviceMemory,
+    renderer: renderer.caps.renderer,
+    software,
+    override: qualityOverride,
+  }));
   const MOON_ALIASES = { new: 0, crescent: .14, first: .25, 'first-quarter': .25, full: .5, last: .75, 'last-quarter': .75 };
   const selected = requested || config.theme || 'auto';
   const state = {
@@ -70,7 +90,7 @@ function start() {
   function requestSea() {
     if (seaRequested) return;
     seaRequested = true;
-    const size = Math.min(2048, renderer.caps.maxTexture);
+    const size = atlasSizeFor(quality.config, { maxTexture: renderer.caps.maxTexture, memory: navigator.deviceMemory });
     buildAtlas('sea', { size, seaWords: SEA_WORDS, cloudWords: CLOUD_WORDS }).then(({ pixels }) => {
       renderer.setGlyphs(pixels, size);
       document.body.classList.add('sea-lettered');
@@ -81,7 +101,7 @@ function start() {
   function requestQuotes() {
     if (quotesRequested || !quotes.length) return;
     quotesRequested = true;
-    const size = Math.min(2048, renderer.caps.maxTexture);
+    const size = atlasSizeFor(quality.config, { maxTexture: renderer.caps.maxTexture, memory: navigator.deviceMemory });
     buildAtlas('quotes', { size, quotes: quotes.map(({ id, lang, text, author }) => ({ id, lang, text, author })) })
       .then(result => { corridor.setAtlas({ ...result, size }); invalidate(); })
       .catch(error => console.warn('Quotation walls unavailable:', error));
@@ -91,10 +111,29 @@ function start() {
   let raf = 0, last = 0, lost = false, frames = 0;
   const pacer = new Pacer(), governor = new Governor();
   const viewport = { width: 1, height: 1 };
+  function updateGovernorCeiling() {
+    const q = quality.config;
+    governor.setMax(Math.min(devicePixelRatio || 1, q.maxScale, Math.sqrt(q.maxPixels / (viewport.width * viewport.height))));
+  }
+  function applyQuality({ initial = false } = {}) {
+    const q = quality.config;
+    renderer.setQuality(q);
+    particles.setBudget(q.particles);
+    document.body.classList.toggle('low-power', q.lowPower);
+    pacer.setInterval(q.frameInterval);
+    governor.setPace(q.frameInterval);
+    if (!initial) {
+      updateGovernorCeiling();
+      governor.setMin(q.minScale);
+      renderer.resize(viewport.width, viewport.height, governor.scale);
+    } else {
+      governor.setMin(q.minScale);
+    }
+  }
   function measure() {
     viewport.width = Math.max(1, root.clientWidth); viewport.height = Math.max(1, root.clientHeight);
     // Background detail has a bounded pixel budget; DOM text stays at native resolution.
-    governor.setMax(Math.min(devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / (viewport.width * viewport.height))));
+    updateGovernorCeiling();
     world.setViewport(viewport.width, viewport.height);
     renderer.resize(viewport.width, viewport.height, governor.scale);
     layoutLanterns();
@@ -107,7 +146,9 @@ function start() {
     if (!pacer.due(now)) { raf = requestAnimationFrame(frame); return; }
     const dt = last ? Math.min((now - last) / 1000, .1) : 0;
     // Measured smoothness drives resolution: keep motion fluid before keeping pixels.
-    if (governor.sample(now)) renderer.resize(viewport.width, viewport.height, governor.scale);
+    const resized = governor.sample(now);
+    if (quality.observe(governor.consumeEvent())) applyQuality();
+    else if (resized) renderer.resize(viewport.width, viewport.height, governor.scale);
     last = now;
     let animating = false;
 
@@ -551,6 +592,7 @@ function start() {
     getState: () => ({
       theme: PRESETS[state.theme].label, automatic: state.automatic, wind: world.wind, density: world.density,
       paused: world.paused, clouds: world.cloudsTarget > .5, time: world.time, frames, scale: +governor.scale.toFixed(2),
+      quality: quality.config.name, software, antialias: renderer.caps.antialias,
       words: SEA_WORDS.length, ripples: world.ripples.length,
       scene: scene.target ? 'article' : harbor.target ? 'friends' : 'sea', article: scene.article,
       transitioning: scene.transitioning || harbor.transitioning, transition: scene.mix, passageFrames: scene.frames,
@@ -567,6 +609,7 @@ function start() {
   setTheme(state.automatic ? 'auto' : state.theme, false);
   setRange('wind', config.wind); setRange('density', config.density);
   bindFriends(config.friends, config.friendsPage);
+  applyQuality({ initial: true });
   measure();
   setScene(config.scene === 'sea' ? null : config.scene, false);
   if (config.scene === 'article') requestQuotes();

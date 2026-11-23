@@ -199,6 +199,7 @@ uniform sampler2D uCloudGlyphs;
 uniform vec2 uCloudOffset;
 uniform float uCloudCover;
 uniform float uCloudHeaviness;
+uniform float uCloudQuality;
 uniform float uCloudInk;
 uniform float uClouds;
 uniform float uUnderwater;
@@ -497,105 +498,159 @@ vec4 clouds(vec3 dir) {
   vec3 accum = vec3(0.0);
   vec3 hitPos = vec3(0.0);
   float hitDist = 0.0, hitW = 0.0;
+  vec3 cumRgb = vec3(0.0);
+  float cumAlpha = 0.0;
 
   if (cov > .005) {
-    float t0 = cloudShellDist(dir.y, uCamera.y, Rc, H0);
-    // Keep oblique raymarch spans compact so scattered cumulus steps never exceed ~155 m.
-    float maxSpan = mix(2450.0, 3200.0, stratus);
-    float t1 = min(cloudShellDist(dir.y, uCamera.y, Rc, H1), min(tMax, t0 + maxSpan));
-    if (t0 < t1) {
-      int steps = int(mix(16.0, 10.0, stratus) + .5);
-      float stepLen = (t1 - t0) / float(steps);
-      // Nyquist-matched texture LOD filters sub-step noise at oblique angles to eliminate horizontal slices.
-      float macLod = clamp(log2(max(stepLen / 105.0, 1.0)), 0.0, 2.2);
-      float detLod = clamp(log2(max(stepLen / 55.0, 1.0)), 0.0, 2.8);
-      float d3Weight = clamp(150.0 / max(stepLen, 150.0), .18, 1.0);
-      float jitter = .5 + (hash12(gl_FragCoord.xy) - .5) * .28;
-      float t = t0 + jitter * stepLen;
-      float effStep = stepLen / (1.0 + stepLen * .0016);
-      float sigmaExt = mix(.0046, .0062, stratus);
-      float sigmaLight = .0078;
-      float hor2 = 1.0 - dir.y * dir.y;
-      vec2 windShear = normalize(uLightDir.xz + vec2(1e-4)) * 140.0;
-      float domeScale = mix(.22, .05, stratus);
-      float botEdge = mix(.30, .15, stratus);
-      float topEdge = mix(.26, .58, stratus);
-      float erodeAmt = mix(.48, .25, stratus);
-      float densGain = mix(1.0, 1.40, stratus * .5 + uCloudHeaviness * .5);
+    float sigmaExt = mix(.0046, .0062, stratus);
+    float sigmaLight = .0078;
+    float hor2 = 1.0 - dir.y * dir.y;
+    vec2 windShear = normalize(uLightDir.xz + vec2(1e-4)) * 140.0;
+    float domeScale = mix(.22, .05, stratus);
+    float botEdge = mix(.30, .15, stratus);
+    float topEdge = mix(.26, .58, stratus);
+    float erodeAmt = mix(.48, .25, stratus);
+    float densGain = mix(1.0, 1.40, stratus * .5 + uCloudHeaviness * .5);
 
-      float heavyDark = 1.0 - uCloudHeaviness * .54;
-      vec3 skyTopCol = mix(uAmbient * 1.45, vec3(dot(uAmbient, vec3(.2126, .7152, .0722))) * vec3(1.08, 1.12, 1.18), uOvercast * .60);
-      vec3 skyBaseCol = skyTopCol * mix(.38, .24, uCloudHeaviness) + sunHaze * (.08 * twilight);
-      float sunElevBoost = clamp(uLightDir.y + .22, .10, 1.0);
-      vec3 warmCrest = mix(uLightColor, uLightColor + sunHaze * .65, twilight);
-      float directScale = sunElevBoost * mix(.74, .24, uCloudHeaviness * .72 + uOvercast * .28);
-      float twiMask = twilight * (.38 + .62 * smoothstep(.0, .6, mu)) * (1.0 - uCloudHeaviness * .75);
+    float heavyDark = 1.0 - uCloudHeaviness * .54;
+    vec3 skyTopCol = mix(uAmbient * 1.45, vec3(dot(uAmbient, vec3(.2126, .7152, .0722))) * vec3(1.08, 1.12, 1.18), uOvercast * .60);
+    vec3 skyBaseCol = skyTopCol * mix(.38, .24, uCloudHeaviness) + sunHaze * (.08 * twilight);
+    float sunElevBoost = clamp(uLightDir.y + .22, .10, 1.0);
+    vec3 warmCrest = mix(uLightColor, uLightColor + sunHaze * .65, twilight);
+    float directScale = sunElevBoost * mix(.74, .24, uCloudHeaviness * .72 + uOvercast * .28);
+    float twiMask = twilight * (.38 + .62 * smoothstep(.0, .6, mu)) * (1.0 - uCloudHeaviness * .75);
 
-      for (int i = 0; i < 16; i++) {
-        if (i >= steps) break;
-        vec3 pos = uCamera + dir * t;
-        float alt = pos.y + (t * t * hor2) / (2.0 * Rc);
-        float h = clamp((alt - H0) / H_THICK, 0.0, 1.0);
-
+    if (uCloudQuality < .25) {
+      float h = .35;
+      float tLow = cloudShellDist(dir.y, uCamera.y, Rc, H0 + H_THICK * h);
+      if (tLow < tMax) {
+        vec3 pos = uCamera + dir * tLow;
         vec2 pMac = macroRot * ((pos.xz + windOffset + windShear * h) / 10500.0);
-        float macro = textureLod(uNoise, pMac, macLod).b;
-        float domeBias = domeScale * smoothstep(.18, 1.0, h);
-        float effThresh = thresh + domeBias;
-        if (macro >= effThresh - .02) {
-          float bottom = smoothstep(0.0, botEdge, h);
-          float top = smoothstep(1.0, topEdge, h);
-          float base = clamp((macro - effThresh) / max(1.0 - effThresh, .28), 0.0, 1.0) * bottom * top;
-          if (base > .004) {
-            vec2 pDet = detRot * ((pos.xz + windOffset + windShear * (h * .85)) / 5200.0);
-            vec2 ba = textureLod(uNoise, pDet, detLod).ba;
-            float d3 = noise3(vec3((pos.xz + windOffset * 1.15) * .0055, h * 4.5 + uTime * .04));
-            float billow = mix(ba.y * .72 + ba.x * .28, ba.y * .60 + ba.x * .20 + d3 * .20, d3Weight);
-            float dens = max(base - (1.0 - billow) * erodeAmt * (1.0 - base * .62), 0.0);
-            dens = mix(dens, base * (.42 + billow * .92), stratus * .62) * densGain;
-
-            if (dens > .003) {
-              vec3 pL1 = pos + lDir * 200.0;
-              vec2 r1 = pL1.xz - uCamera.xz;
-              float hL1 = clamp((pL1.y + dot(r1, r1) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
-              float mL1 = textureLod(uNoise, macroRot * ((pL1.xz + windOffset + windShear * hL1) / 10500.0), macLod).b;
-              float dL1 = max(mL1 - thresh - domeScale * smoothstep(.18, 1.0, hL1), 0.0) * smoothstep(0.0, .12, hL1) * smoothstep(1.0, .25, hL1);
-
-              vec3 pL2 = pos + lDir * 600.0;
-              vec2 r2 = pL2.xz - uCamera.xz;
-              float hL2 = clamp((pL2.y + dot(r2, r2) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
-              float mL2 = textureLod(uNoise, macroRot * ((pL2.xz + windOffset + windShear * hL2) / 10500.0), macLod).b;
-              float dL2 = max(mL2 - thresh - domeScale * smoothstep(.18, 1.0, hL2), 0.0) * smoothstep(0.0, .12, hL2) * smoothstep(1.0, .25, hL2);
-
-              float optLight = (dL1 * 220.0 + dL2 * 440.0 + stratus * (.35 + (1.0 - billow) * .35) * (1.0 - h) * 180.0) * sigmaLight * mix(.85, 1.45, uCloudHeaviness);
-              float beer = max(exp(-optLight), .30 * exp(-optLight * .32)) * mix(.42, 1.0, smoothstep(.05, .72, h));
-              float powder = mix(.58, 1.12, 1.0 - exp(-dens * 3.0));
-              float lightEnergy = mix(beer * powder, beer, max(mu, 0.0) * .50);
-              float phaseEff = mix(.78, phase, exp(-optLight * .65) * (1.0 - stratus * .72));
-
-              vec3 directCol = warmCrest * (lightEnergy * phaseEff * directScale);
-              vec3 ambientCol = mix(skyBaseCol, skyTopCol, smoothstep(.05, .85, h)) * heavyDark * mix(1.0, .62, clamp(dens * 1.15, 0.0, 1.0));
-              // Low sun / dawn catches warm underbellies and horizon-facing edges.
-              vec3 twilightRim = sunHaze * (twiMask * exp(-optLight * .65) * mix(1.0, .42, h));
-              vec3 stepLight = directCol + ambientCol + twilightRim + uFlash * vec3(1.5, 1.65, 2.1) * (1.1 - h * .65);
-
-              float stepT = exp(-dens * effStep * sigmaExt);
-              float wVis = T * (1.0 - stepT);
-              accum += wVis * stepLight;
-              hitPos += wVis * pos;
-              hitDist += wVis * t;
-              hitW += wVis;
-              T *= stepT;
-              if (T < .025) break;
-            }
+        float macro = textureLod(uNoise, pMac, .6).b;
+        float effThresh = thresh + domeScale * .35;
+        float base = clamp((macro - effThresh) / max(1.0 - effThresh, .28), 0.0, 1.0);
+        if (base > .004) {
+          vec2 pDet = detRot * ((pos.xz + windOffset + windShear * (h * .85)) / 5200.0);
+          vec2 ba = textureLod(uNoise, pDet, .9).ba;
+          float billow = ba.y * .72 + ba.x * .28;
+          float dens = max(base - (1.0 - billow) * erodeAmt * (1.0 - base * .62), 0.0);
+          dens = mix(dens, base * (.42 + billow * .92), stratus * .62) * densGain;
+          if (dens > .003) {
+            vec2 pL = macroRot * ((pos.xz + lDir.xz * 380.0 + windOffset + windShear * .65) / 10500.0);
+            float mL = textureLod(uNoise, pL, .8).b;
+            float dL = max(mL - thresh - domeScale * .65, 0.0);
+            float optLight = (dL * 620.0 + stratus * (.35 + (1.0 - billow) * .35) * .65 * 180.0) * sigmaLight * mix(.85, 1.45, uCloudHeaviness);
+            float beer = max(exp(-optLight), .30 * exp(-optLight * .32)) * .76;
+            float powder = mix(.58, 1.12, 1.0 - exp(-dens * 3.0));
+            float lightEnergy = mix(beer * powder, beer, max(mu, 0.0) * .50);
+            float phaseEff = mix(.78, phase, exp(-optLight * .65) * (1.0 - stratus * .72));
+            vec3 directCol = warmCrest * (lightEnergy * phaseEff * directScale);
+            vec3 ambientCol = mix(skyBaseCol, skyTopCol, .42) * heavyDark * mix(1.0, .62, clamp(dens * 1.15, 0.0, 1.0));
+            vec3 twilightRim = sunHaze * (twiMask * exp(-optLight * .65) * .80);
+            cumRgb = directCol + ambientCol + twilightRim + uFlash * vec3(1.5, 1.65, 2.1) * .72;
+            cumRgb = mix(horHaze, cumRgb, exp(-tLow * (.000018 + uFogDensity * .005)));
+            cumAlpha = clamp(1.0 - exp(-dens * mix(2.2, 3.6, stratus)), 0.0, 1.0);
+            T = 1.0 - cumAlpha;
           }
         }
-        t += stepLen;
       }
+    } else {
+      float t0 = cloudShellDist(dir.y, uCamera.y, Rc, H0);
+      // Keep oblique raymarch spans compact so scattered cumulus steps never exceed ~155 m.
+      float maxSpan = mix(2450.0, 3200.0, stratus);
+      float t1 = min(cloudShellDist(dir.y, uCamera.y, Rc, H1), min(tMax, t0 + maxSpan));
+      if (t0 < t1) {
+        bool med = uCloudQuality < .75;
+        int steps = med ? int(mix(9.0, 6.0, stratus) + .5) : int(mix(16.0, 10.0, stratus) + .5);
+        float stepLen = (t1 - t0) / float(steps);
+        // Nyquist-matched texture LOD filters sub-step noise at oblique angles to eliminate horizontal slices.
+        float macLod = clamp(log2(max(stepLen / 105.0, 1.0)), 0.0, 2.2);
+        float detLod = clamp(log2(max(stepLen / 55.0, 1.0)), 0.0, 2.8);
+        float d3Weight = clamp(150.0 / max(stepLen, 150.0), .18, 1.0);
+        float jitter = .5 + (hash12(gl_FragCoord.xy) - .5) * .28;
+        float t = t0 + jitter * stepLen;
+        float effStep = stepLen / (1.0 + stepLen * .0016);
+
+        for (int i = 0; i < 16; i++) {
+          if (i >= steps) break;
+          vec3 pos = uCamera + dir * t;
+          float alt = pos.y + (t * t * hor2) / (2.0 * Rc);
+          float h = clamp((alt - H0) / H_THICK, 0.0, 1.0);
+
+          vec2 pMac = macroRot * ((pos.xz + windOffset + windShear * h) / 10500.0);
+          float macro = textureLod(uNoise, pMac, macLod).b;
+          float domeBias = domeScale * smoothstep(.18, 1.0, h);
+          float effThresh = thresh + domeBias;
+          if (macro >= effThresh - .02) {
+            float bottom = smoothstep(0.0, botEdge, h);
+            float top = smoothstep(1.0, topEdge, h);
+            float base = clamp((macro - effThresh) / max(1.0 - effThresh, .28), 0.0, 1.0) * bottom * top;
+            if (base > .004) {
+              vec2 pDet = detRot * ((pos.xz + windOffset + windShear * (h * .85)) / 5200.0);
+              vec2 ba = textureLod(uNoise, pDet, detLod).ba;
+              float billow = ba.y * .72 + ba.x * .28;
+              if (!med) {
+                float d3 = noise3(vec3((pos.xz + windOffset * 1.15) * .0055, h * 4.5 + uTime * .04));
+                billow = mix(billow, ba.y * .60 + ba.x * .20 + d3 * .20, d3Weight);
+              }
+              float dens = max(base - (1.0 - billow) * erodeAmt * (1.0 - base * .62), 0.0);
+              dens = mix(dens, base * (.42 + billow * .92), stratus * .62) * densGain;
+
+              if (dens > .003) {
+                float shadowDist;
+                if (med) {
+                  vec3 pL1 = pos + lDir * 340.0;
+                  vec2 r1 = pL1.xz - uCamera.xz;
+                  float hL1 = clamp((pL1.y + dot(r1, r1) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
+                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz + windOffset + windShear * hL1) / 10500.0), macLod).b;
+                  float dL1 = max(mL1 - thresh - domeScale * smoothstep(.18, 1.0, hL1), 0.0) * smoothstep(0.0, .12, hL1) * smoothstep(1.0, .25, hL1);
+                  shadowDist = dL1 * 620.0;
+                } else {
+                  vec3 pL1 = pos + lDir * 200.0;
+                  vec2 r1 = pL1.xz - uCamera.xz;
+                  float hL1 = clamp((pL1.y + dot(r1, r1) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
+                  float mL1 = textureLod(uNoise, macroRot * ((pL1.xz + windOffset + windShear * hL1) / 10500.0), macLod).b;
+                  float dL1 = max(mL1 - thresh - domeScale * smoothstep(.18, 1.0, hL1), 0.0) * smoothstep(0.0, .12, hL1) * smoothstep(1.0, .25, hL1);
+
+                  vec3 pL2 = pos + lDir * 600.0;
+                  vec2 r2 = pL2.xz - uCamera.xz;
+                  float hL2 = clamp((pL2.y + dot(r2, r2) / (2.0 * Rc) - H0) / H_THICK, 0.0, 1.0);
+                  float mL2 = textureLod(uNoise, macroRot * ((pL2.xz + windOffset + windShear * hL2) / 10500.0), macLod).b;
+                  float dL2 = max(mL2 - thresh - domeScale * smoothstep(.18, 1.0, hL2), 0.0) * smoothstep(0.0, .12, hL2) * smoothstep(1.0, .25, hL2);
+                  shadowDist = dL1 * 220.0 + dL2 * 440.0;
+                }
+
+                float optLight = (shadowDist + stratus * (.35 + (1.0 - billow) * .35) * (1.0 - h) * 180.0) * sigmaLight * mix(.85, 1.45, uCloudHeaviness);
+                float beer = max(exp(-optLight), .30 * exp(-optLight * .32)) * mix(.42, 1.0, smoothstep(.05, .72, h));
+                float powder = mix(.58, 1.12, 1.0 - exp(-dens * 3.0));
+                float lightEnergy = mix(beer * powder, beer, max(mu, 0.0) * .50);
+                float phaseEff = mix(.78, phase, exp(-optLight * .65) * (1.0 - stratus * .72));
+
+                vec3 directCol = warmCrest * (lightEnergy * phaseEff * directScale);
+                vec3 ambientCol = mix(skyBaseCol, skyTopCol, smoothstep(.05, .85, h)) * heavyDark * mix(1.0, .62, clamp(dens * 1.15, 0.0, 1.0));
+                // Low sun / dawn catches warm underbellies and horizon-facing edges.
+                vec3 twilightRim = sunHaze * (twiMask * exp(-optLight * .65) * mix(1.0, .42, h));
+                vec3 stepLight = directCol + ambientCol + twilightRim + uFlash * vec3(1.5, 1.65, 2.1) * (1.1 - h * .65);
+
+                float stepT = exp(-dens * effStep * sigmaExt);
+                float wVis = T * (1.0 - stepT);
+                accum += wVis * stepLight;
+                hitPos += wVis * pos;
+                hitDist += wVis * t;
+                hitW += wVis;
+                T *= stepT;
+                if (T < .025) break;
+              }
+            }
+          }
+          t += stepLen;
+        }
+      }
+      cumAlpha = clamp(1.0 - T, 0.0, 1.0);
+      cumRgb = accum / max(cumAlpha, 1e-4);
     }
   }
 
-  float cumAlpha = clamp(1.0 - T, 0.0, 1.0);
-  vec3 cumRgb = accum / max(cumAlpha, 1e-4);
   if (hitW > .02) {
     float avgDist = hitDist / hitW;
     if (avgDist < 11000.0 && uCloudInk > .01) {

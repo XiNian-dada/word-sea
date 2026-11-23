@@ -2,6 +2,7 @@ import { Program, createContext, createTarget, createTexture } from '../gl/conte
 import { FULLSCREEN_VERTEX, SKY_FRAGMENT, SKY_LUT_FRAGMENT } from '../gl/shaders/sky.js';
 import { OCEAN_FRAGMENT, OCEAN_VERTEX, WAVE_COUNT } from '../gl/shaders/ocean.js';
 import { noisePixels, detailNormalPixels } from './textures.js';
+import { TIERS } from './quality.js';
 
 const LUT_SIZE = 64;
 
@@ -10,12 +11,13 @@ const LUT_SIZE = 64;
  * drawn here in one pass list; the DOM above it only holds text and controls.
  */
 export class Renderer {
-  constructor(canvas) {
-    const context = createContext(canvas);
+  constructor(canvas, { antialias = true } = {}) {
+    const context = createContext(canvas, { antialias });
     if (!context) throw new Error('WebGL2 unavailable');
     this.canvas = canvas;
     this.gl = context.gl;
     this.caps = context.caps;
+    this.quality = TIERS[2];
     const gl = this.gl;
     this.vao = gl.createVertexArray();
 
@@ -39,14 +41,20 @@ export class Renderer {
     };
     this.mesh = null;
     this.meshAspect = 0;
+    this.meshRows = 0; this.meshCols = 0;
     this.width = 0; this.height = 0;
     this.passes = [];
+  }
+
+  setQuality(config) {
+    this.quality = config;
   }
 
   setGlyphs(pixels, size) {
     const gl = this.gl;
     gl.deleteTexture(this.textures.glyphs);
-    this.textures.glyphs = createTexture(gl, { width: size, height: size, data: pixels, wrap: gl.REPEAT, mipmaps: true, anisotropy: 8, caps: this.caps });
+    const anisotropy = this.quality.id === 2 ? 8 : this.quality.id === 1 ? 4 : 0;
+    this.textures.glyphs = createTexture(gl, { width: size, height: size, data: pixels, wrap: gl.REPEAT, mipmaps: true, anisotropy, caps: this.caps });
   }
 
   resize(width, height, scale) {
@@ -60,9 +68,10 @@ export class Renderer {
    * the horizon, wide enough for the field of view plus parallax.
    */
   buildMesh(tanHalfX) {
-    if (this.mesh && Math.abs(this.meshAspect - tanHalfX) < 1e-3) return;
-    this.meshAspect = tanHalfX;
-    const gl = this.gl, rows = 224, cols = 176;
+    const rows = this.quality.meshRows, cols = this.quality.meshCols;
+    if (this.mesh && this.meshRows === rows && this.meshCols === cols && Math.abs(this.meshAspect - tanHalfX) < 1e-3) return;
+    this.meshAspect = tanHalfX; this.meshRows = rows; this.meshCols = cols;
+    const gl = this.gl;
     const vertices = new Float32Array((rows + 1) * (cols + 1) * 2);
     let v = 0;
     for (let r = 0; r <= rows; r++) {
@@ -142,7 +151,7 @@ export class Renderer {
       .set('uTime', frame.time).set('uWaveTime', s.waveTime).set('uAmplitude', s.amplitude)
       .set('uWaveA', s.wavesA).set('uWaveB', s.wavesB).set('uWindDir', s.windDir).set('uWindAlign', s.windAlign)
       .set('uRipples', s.ripples).set('uTextScale', s.textScale).set('uDensity', s.density).set('uWind', s.wind)
-      .set('uWaterDeep', frame.atmosphere.water).set('uInk', frame.atmosphere.ink).set('uRain', s.rain)
+      .set('uWaterDeep', frame.atmosphere.water).set('uInk', frame.atmosphere.ink).set('uRain', s.rain).set('uDetailLevel', this.quality.oceanDetail)
       .set('uUnderwater', cam.underwater ? 1 : 0).set('uHarbor', s.harbor)
       .set('uLanterns', s.lanterns).set('uLanternColors', s.lanternColors)
       .texture('uGlyphs', this.textures.glyphs).texture('uDetail', this.textures.detail);
@@ -159,7 +168,7 @@ export class Renderer {
     p.set('uInvViewProj', frame.camera.invViewProj).set('uCamera', frame.camera.eye).set('uTime', frame.time)
       .set('uSunDir', a.discDir).set('uDiscColor', a.discColor).set('uDiscSize', a.discSize)
       .set('uMoon', a.moon).set('uMoonPhase', a.moonPhase).set('uStars', a.stars)
-      .set('uCloudOffset', c.offset).set('uCloudCover', c.cover).set('uCloudHeaviness', c.heaviness).set('uCloudInk', c.ink).set('uClouds', c.enabled)
+      .set('uCloudOffset', c.offset).set('uCloudCover', c.cover).set('uCloudHeaviness', c.heaviness).set('uCloudQuality', this.quality.cloudQuality).set('uCloudInk', c.ink).set('uClouds', c.enabled)
       .set('uUnderwater', frame.camera.underwater ? 1 : 0).set('uWaterDeep', a.water)
       .texture('uNoise', this.textures.noise).texture('uCloudGlyphs', this.textures.glyphs);
     // Only pixels the sea did not cover still hold the far depth.

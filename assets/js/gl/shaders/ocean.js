@@ -80,6 +80,7 @@ uniform float uWind;
 uniform vec2 uWindDir;
 uniform vec3 uInk;
 uniform float uRain;
+uniform float uDetailLevel;
 uniform float uUnderwater;
 uniform vec3 uLanterns[6];
 uniform vec3 uLanternColors[6];
@@ -110,13 +111,13 @@ void main() {
   float near = exp(-distance * .018);
   vec2 drift = uWindDir * uWaveTime;
   vec2 d0 = texture(uDetail, vWorld.xz * .061 + drift * .021).xy * 2.0 - 1.0;
-  vec2 d1 = distance < 260.0
+  vec2 d1 = uDetailLevel > .5 && distance < 260.0
     ? texture(uDetail, vWorld.xz * .157 - vec2(drift.y, -drift.x) * .037).xy * 2.0 - 1.0
     : vec2(0.0);
   vec2 detail = d0 * .62 + d1 * .38;
   float chop = clamp(length(d0 * .55 + d1 * .95) * .85, 0.0, 1.0);
   detail *= (.18 + uWind * .55) * (.25 + .75 * near);
-  if (uRain > .001) detail += rainRipples(vWorld.xz) * uRain * near;
+  if (uDetailLevel > .5 && uRain > .001) detail += rainRipples(vWorld.xz) * uRain * near;
   vec3 N = normalize(vNormal + vec3(detail.x, 0.0, detail.y));
 
   // R holds a distance field (0.5 on the outline), G the word's tone.

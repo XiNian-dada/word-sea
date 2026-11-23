@@ -1,14 +1,21 @@
 // Thin WebGL2 helpers: programs with cached uniforms, textures and render targets.
 
-export function createContext(canvas) {
+export function createContext(canvas, { antialias = true } = {}) {
   const gl = canvas.getContext('webgl2', {
-    alpha: false, antialias: true, depth: true, stencil: false,
+    alpha: false, antialias, depth: true, stencil: false,
     premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'default',
     desynchronized: true,
   });
   if (!gl) return null;
   const anisotropic = gl.getExtension('EXT_texture_filter_anisotropic');
   const halfFloat = gl.getExtension('EXT_color_buffer_half_float') || gl.getExtension('EXT_color_buffer_float');
+  let renderer = '';
+  try {
+    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+    renderer = (debug && gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '';
+  } catch {
+    renderer = '';
+  }
   return {
     gl,
     caps: {
@@ -16,6 +23,8 @@ export function createContext(canvas) {
       anisotropic,
       halfFloatTarget: Boolean(halfFloat),
       maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      renderer: String(renderer),
+      antialias: Boolean(gl.getContextAttributes()?.antialias),
     },
   };
 }
