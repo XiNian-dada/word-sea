@@ -184,13 +184,13 @@ void main() {
   water = mix(water, foamColor, seaFoam * (1.0 - uHarbor * .5));
 
   // Letters are a matte film that lifts out of the water and mirrors the sky softly.
-  float catchLight = clamp(fresnel * 1.15 + .02, 0.0, .74);
-  vec3 letter = mix(body * 1.32 + uInk * (uAmbient * .18 + uLightColor * NdL * .03), reflected * .88, catchLight);
+  float catchLight = clamp(fresnel * 1.6 + .24, 0.0, 1.0);
+  vec3 letter = mix(body * 1.5 + uInk * (uAmbient * .26 + uLightColor * NdL * .04), reflected * 1.05, catchLight);
   float foam = smoothstep(.55, 1.0, crest) * (.14 + uWind * .48);
   letter += (uAmbient * .32 + uLightColor * .07) * foam;
   letter = mix(letter, foamColor, seaFoam * .65);
   float wordInk = ink * mix(1.0, .32, uHarbor);
-  vec3 gap = water * mix(.84, .92, uHarbor);
+  vec3 gap = water * mix(.62, .9, uHarbor);
   color = mix(gap, letter, wordInk) + glitter * (.26 + wordInk * .58) * mix(1.0, .45, uHarbor);
 
   // Friends' lanterns: point lights whose reflections are torn into streaks and warm pools by the waves.
