@@ -5,7 +5,7 @@
 **单画布 WebGL2 驱动的零构建 Typecho 主题 — 首页字海、深潜文章语廊与海上友链灯火。**
 
 [![Typecho](https://img.shields.io/badge/Typecho-1.3%2B-3a6b8c?style=flat-square)](https://github.com/typecho/typecho/releases/tag/v1.3.0)
-[![Release](https://img.shields.io/badge/release-v0.3.10-b46d3d?style=flat-square)](https://akyuu.leeinx.com/XiNian-dada/word-sea/releases)
+[![Release](https://img.shields.io/badge/release-v0.4.0-b46d3d?style=flat-square)](https://akyuu.leeinx.com/XiNian-dada/word-sea/releases)
 [![WebGL2](https://img.shields.io/badge/render-WebGL2_%C2%B7_Zero--Build-2f6f65?style=flat-square)](#性能自适应与运行边界)
 [![License](https://img.shields.io/badge/license-GPL--2.0--or--later-4c566a?style=flat-square)](LICENSE.txt)
 
@@ -109,7 +109,7 @@ node --test tests/scene.test.mjs
 
 - **全局快捷键**（输入正文、评论、搜索框或灯箱打开时不触发）：`Space` 暂停 / 继续动态画面；`H` 切换沉浸模式；`Esc` 退出沉浸模式、关闭拾句卡或返回字海。
 - **URL 调试与预览参数**：支持 `?quality=high|medium|low` 强制锁定画质档位，支持 `?theme=daybreak|morning|noon|afternoon|sunset|night`、`?moon=crescent|first|full|last` 与 `?aurora=1|0` 预览特定天象。
-- **第三方数据源与限额**：实况天气使用 [Open-Meteo](https://open-meteo.com/)（CC BY 4.0）及 GeoNames 地名搜索，IP 位置估算使用 [ipwho.is](https://ipwhois.io/)，均由浏览器直连、免 API 密钥；开源免费端点面向非商业及低频请求，IP 归属地亦可能因代理或运营商路由产生偏差，商业或高流量站点请注意各自配额条款。
+- **第三方数据源与限额**：实况天气使用 [Open-Meteo](https://open-meteo.com/)（CC BY 4.0）及 GeoNames 地名搜索，IP 位置估算使用 [GeoJS](https://www.geojs.io/)，均由浏览器直连、免 API 密钥；开源免费端点面向非商业及低频请求，IP 归属地亦可能因代理或运营商路由产生偏差，商业或高流量站点请注意各自配额条款。
 
 ## 性能自适应与运行边界
 
@@ -131,7 +131,7 @@ node --test tests/scene.test.mjs
 
 ## 相关文档与代码结构
 
-- [更新日志（CHANGELOG.md）](CHANGELOG.md)：`0.1.1` 至 `0.3.10` 及当前开发版的完整版本演进。
+- [更新日志（CHANGELOG.md）](CHANGELOG.md)：`0.1.1` 至 `0.4.0` 的完整版本演进。
 - [名言出典（QUOTES.md）](QUOTES.md)：语廊高墙 36 句、23 种语言原文与原典出处。
 - [开源协议（LICENSE.txt）](LICENSE.txt) 与 [PrismJS MIT 协议](assets/vendor/prism-LICENSE.txt)。
 

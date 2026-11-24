@@ -12,7 +12,7 @@ const file = join(directory, `word-sea-typecho-${version}.zip`);
 // Archive the committed source, excluding tests, workflows and local QA output.
 execFileSync('git', [
   'archive', '--format=zip', '--prefix=word-sea/', `--output=${file}`, 'HEAD', '--',
-  ':(top,glob)*.php', 'assets', 'friends.json', 'README.md',
+  ':(top,glob)*.php', 'assets', 'friends.json', 'README.md', 'CHANGELOG.md',
   'LICENSE.txt', 'QUOTES.md', 'screenshot.png',
 ], { stdio: 'inherit' });
 console.log(`Built ${file}`);
