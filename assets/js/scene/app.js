@@ -316,9 +316,17 @@ function start() {
   const projected = { x: 0, y: 0, w: 1 };
   function layoutLanterns() {
     const cruise = harbor.target ? harbor.cruiseTarget : CRUISE + (harbor.page - 1) * HARBOR_PAGE_STEP;
+    const compact = viewport.width <= 1150 || viewport.height <= 650;
     for (const node of nodes) {
       const p = world.harborPoint(node.friend.at[0], node.friend.at[1], cruise);
       node.x = p.x; node.z = p.z;
+      if (node.anchor && !compact && !friendsView.hidden) {
+        node.w = node.anchor.offsetWidth || 248;
+        node.h = node.anchor.offsetHeight || 82;
+      } else {
+        node.w ||= 248;
+        node.h ||= 82;
+      }
     }
   }
   function bindFriends(data, page = harbor.page) {
@@ -342,7 +350,7 @@ function start() {
     }
     const anchors = [...document.querySelectorAll('.friend-link')];
     nodes = friends.map((friend, i) => ({
-      friend, i, x: 0, y: 0, z: 0, level: 0, alpha: 0, anchor: anchors[i],
+      friend, i, x: 0, y: 0, z: 0, level: 0, alpha: 0, w: 248, h: 82, cardX: 0, cardY: 0, anchor: anchors[i],
       color: friend.color.map(v => v / 255),
     }));
     layoutLanterns();
@@ -363,6 +371,8 @@ function start() {
     sea.lanterns.fill(0); sea.lanternColors.fill(0);
     const compact = viewport.width <= 1150 || viewport.height <= 650;
     const progress = harbor.paging ? harbor.pageMix : harbor.mix;
+    const minY = Math.min(250, Math.round(viewport.height * .32));
+    const placed = [];
     for (const node of nodes) {
       const target = harbor.hover === node.i ? 1 : 0;
       node.level = reducedMotion.matches ? target : damp(node.level, target, 6, dt);
@@ -378,11 +388,48 @@ function start() {
       if (node.anchor && !compact) {
         // Labels stay anchored while the lanterns themselves ride the waves.
         world.project(projected, node.x, 2.6, node.z);
+        const w = node.w || 248, h = node.h || 82;
         const right = node.friend.at[0] > .62;
-        const x = clamp(projected.x + (right ? -282 : 34), 16, viewport.width - 264);
-        style(node.anchor, 'transform', `translate3d(${x.toFixed(1)}px,${(projected.y - 30).toFixed(1)}px,0)`);
-        style(node.anchor, 'opacity', String(node.alpha * smoothstep(.52, .92, progress)));
+        const maxX = Math.max(16, viewport.width - w - 16);
+        const maxY = Math.max(minY, viewport.height - h - 76);
+        node.cardX = clamp(projected.x + (right ? -(w + 30) : 30), 16, maxX);
+        node.cardY = clamp(projected.y - h * .38, minY, maxY);
+        placed.push(node);
       } else if (node.anchor) { style(node.anchor, 'transform', ''); style(node.anchor, 'opacity', ''); }
+    }
+    if (placed.length > 1) {
+      const gap = 14;
+      for (let pass = 0; pass < 3; pass++) {
+        for (let i = 0; i < placed.length; i++) {
+          for (let j = i + 1; j < placed.length; j++) {
+            const a = placed[i], b = placed[j];
+            const ox = Math.min(a.cardX + a.w, b.cardX + b.w) - Math.max(a.cardX, b.cardX) + gap;
+            const oy = Math.min(a.cardY + a.h, b.cardY + b.h) - Math.max(a.cardY, b.cardY) + gap;
+            if (ox <= 0 || oy <= 0) continue;
+            const rowDiff = Math.abs(a.friend.at[1] - b.friend.at[1]) > .08;
+            if (rowDiff || oy <= ox) {
+              const up = a.friend.at[1] <= b.friend.at[1] ? a : b;
+              const dn = up === a ? b : a;
+              up.cardY -= oy * .5;
+              dn.cardY += oy * .5;
+            } else {
+              const left = a.cardX <= b.cardX ? a : b;
+              const right = left === a ? b : a;
+              left.cardX -= ox * .5;
+              right.cardX += ox * .5;
+            }
+            for (const c of [a, b]) {
+              c.cardX = clamp(c.cardX, 16, Math.max(16, viewport.width - c.w - 16));
+              c.cardY = clamp(c.cardY, minY, Math.max(minY, viewport.height - c.h - 76));
+            }
+          }
+        }
+      }
+    }
+    const cardOpacity = smoothstep(.52, .92, progress);
+    for (const node of placed) {
+      style(node.anchor, 'transform', `translate3d(${node.cardX.toFixed(1)}px,${node.cardY.toFixed(1)}px,0)`);
+      style(node.anchor, 'opacity', String(node.alpha * cardOpacity));
     }
     lanterns.update(nodes);
     return settling || !world.paused;

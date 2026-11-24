@@ -9,7 +9,7 @@ function themeConfig($form)
     ], 'auto', '默认光线'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Select('wordSeaWeather', [
         'auto' => '开启，按访客 IP 估算城市', 'city' => '开启，访客自行选择城市', 'off' => '默认关闭'
-    ], 'auto', '字海天气', '天气使用 Open-Meteo。IP 估算使用 ipwho.is，可能有位置偏差；访客可以更换城市或主动授权浏览器定位。天气接口不可用时沿用原有字海。'));
+    ], 'auto', '字海天气', '天气使用 Open-Meteo。IP 估算使用 GeoJS，可能有位置偏差；访客可以更换城市或主动授权浏览器定位。天气接口不可用时沿用原有字海。'));
     $form->addInput(new \Typecho\Widget\Helper\Form\Element\Text('wordSeaWeatherCity', null, '', '默认天气城市', '选填，例如 成都、上海、Singapore。未保存城市的访客优先使用此城市；访客仍可自行更换。'));
     $form->addInput((new \Typecho\Widget\Helper\Form\Element\Text('wordSeaWind', null, '45', '默认风浪（0–100）'))->addRule('wordsea_wind_valid', '请填写 0–100 的整数'));
     $form->addInput((new \Typecho\Widget\Helper\Form\Element\Text('wordSeaDensity', null, '95', '默认字密度（30–100）'))->addRule('wordsea_density_valid', '请填写 30–100 的整数'));
@@ -136,7 +136,7 @@ function wordsea_friends($options)
     $raw = $value === '' ? wordsea_default_friends() : json_decode($value, true);
     if (!is_array($raw)) return [];
     $colors = [[255,204,135], [153,221,203], [219,196,255], [148,203,255], [255,175,188], [255,224,163]];
-    $positions = [[.10,.63], [.44,.64], [.88,.61], [.055,.89], [.40,.86], [.92,.89]];
+    $positions = [[.10,.60], [.39,.61], [.90,.59], [.055,.90], [.37,.90], [.93,.90]];
     $rows = [];
     foreach ($raw as $item) {
         if (!is_array($item) || !isset($item['name'], $item['url']) || !is_string($item['name']) || !is_string($item['url'])) continue;

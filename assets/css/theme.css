@@ -649,7 +649,7 @@ dialog { color: var(--ink); }
 .friend-list { position: absolute; inset: 0; pointer-events: none; }
 .friend-list > [role="listitem"] { display: contents; }
 .friend-link {
-  position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; width: 248px; min-height: 70px; padding: 11px 16px 11px 12px;
+  position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; width: clamp(220px, 18.2vw, 248px); min-height: 70px; padding: 11px 16px 11px 12px;
   border: 1px solid color-mix(in srgb, var(--lamp) 38%, rgb(255 255 255 / .14)); border-top-color: color-mix(in srgb, var(--lamp) 65%, transparent); border-radius: 16px; text-decoration: none; color: var(--ink); pointer-events: auto; opacity: 0;
   background: linear-gradient(135deg, color-mix(in srgb, var(--lamp) 12%, rgb(8 12 22 / .4)), rgb(8 12 22 / .28));
   backdrop-filter: blur(10px) saturate(130%); -webkit-backdrop-filter: blur(10px) saturate(130%);
