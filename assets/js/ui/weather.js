@@ -280,7 +280,6 @@ export default function setup() {
     if (!validPlace(value)) return;
     cancel();
     place = roundedPlace(value);
-    actual = null;
     enabled = true;
     toggle.checked = true;
     storage.set('wordsea-weather-enabled', true);
@@ -289,7 +288,8 @@ export default function setup() {
     if (place.source !== 'city') storage.set('wordsea-weather-place', null);
     else storage.set('wordsea-weather-place', null, true);
     results.replaceChildren();
-    apply();
+    if (preview === 'live') caption();
+    else apply();
     await refresh();
   }
   async function lookup(name, signal) {

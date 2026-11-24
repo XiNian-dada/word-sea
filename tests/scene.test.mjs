@@ -379,3 +379,54 @@ test('360-degree wind keeps ocean swell energy balanced across orthogonal angles
   const ratio = Math.max(...rmsHeights) / Math.min(...rmsHeights);
   assert.ok(ratio < 1.35, `expected balanced 360-degree swell energy, got ratio ${ratio.toFixed(3)}`);
 });
+
+test('weather transitions turn wind smoothly without branch-cut jumps and preserve theme blend vectors', () => {
+  const stepAngle = (a, b) => Math.acos(Math.max(-1, Math.min(1, a[0] * b[0] + a[1] * b[1]))) * 180 / Math.PI;
+  const angles = Array.from({ length: 12 }, (_, i) => (i * 30) * Math.PI / 180);
+  angles.push(200 * Math.PI / 180);
+
+  for (const angle of angles) {
+    const world = new World({ wind: .45, theme: 'noon' });
+    for (let i = 0; i < 120; i++) world.update(1 / 60);
+
+    let prevDir = [...world.frame.sea.windDir];
+    let prevDrift = [...world.frame.sea.detailDrift];
+    Object.assign(world.weatherTarget, { active: 1, cloud: .6, rain: .4, angle });
+    world.wind = .25;
+
+    for (let i = 0; i < 360; i++) {
+      world.update(1 / 60);
+      const curDir = world.frame.sea.windDir;
+      const curDrift = world.frame.sea.detailDrift;
+      const deg = stepAngle(prevDir, curDir);
+      const dStep = Math.hypot(curDrift[0] - prevDrift[0], curDrift[1] - prevDrift[1]);
+      assert.ok(deg < .25, `wind turn jumped ${deg.toFixed(3)} deg/frame while activating angle=${angle}`);
+      assert.ok(dStep < .03, `detailDrift jumped ${dStep.toFixed(4)}/frame while activating`);
+      prevDir = [...curDir];
+      prevDrift = [...curDrift];
+    }
+
+    Object.assign(world.weatherTarget, { active: 0, cloud: 0, rain: 0, snow: 0, fog: 0, storm: 0 });
+    world.wind = .45;
+    for (let i = 0; i < 180; i++) {
+      world.update(1 / 60);
+      const curDir = world.frame.sea.windDir;
+      const curDrift = world.frame.sea.detailDrift;
+      const deg = stepAngle(prevDir, curDir);
+      const dStep = Math.hypot(curDrift[0] - prevDrift[0], curDrift[1] - prevDrift[1]);
+      assert.ok(deg < .25, `wind turn jumped ${deg.toFixed(3)} deg/frame while deactivating`);
+      assert.ok(dStep < .03, `detailDrift jumped ${dStep.toFixed(4)}/frame while deactivating`);
+      prevDir = [...curDir];
+      prevDrift = [...curDrift];
+    }
+  }
+
+  const world = new World({ theme: 'daybreak' });
+  world.setTheme('sunset');
+  const shadowBefore = [...world.presetFrom.gradeShadow];
+  const highlightBefore = [...world.presetFrom.gradeHighlight];
+  world.updateTheme(.6);
+  world.updateTheme(.6);
+  assert.deepEqual(world.presetFrom.gradeShadow, shadowBefore);
+  assert.deepEqual(world.presetFrom.gradeHighlight, highlightBefore);
+});

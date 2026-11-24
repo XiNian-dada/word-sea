@@ -4,7 +4,7 @@ import { COMMON } from './sky.js';
 // sun glitter and subsurface light are evaluated per pixel. Words are a layer of
 // the water itself, so they bend, catch light and dissolve with distance.
 
-export const WAVE_COUNT = 8;
+export const WAVE_COUNT = 16;
 
 export const OCEAN_VERTEX = /* glsl */`
 in vec2 aGrid;
@@ -27,13 +27,15 @@ void main() {
   vec3 position = vec3(p.x, 0.0, p.y);
   vec3 dx = vec3(1.0, 0.0, 0.0), dz = vec3(0.0, 0.0, 1.0);
   float height = 0.0;
+  float gridDist = length(aGrid);
   for (int i = 0; i < ${WAVE_COUNT}; i++) {
     vec2 d = uWaveA[i].xy;
     float k = uWaveA[i].z;
     // Smooth 360-degree directional lobe focuses swell energy down-wind without rotating fixed wave bases.
     float along = dot(d, uWindDir);
-    float dirWeight = .14 + .86 * pow(max(along * .5 + .5, 0.0), 3.2);
-    float a = uWaveA[i].w * uAmplitude * dirWeight;
+    float dirWeight = .12 + .88 * pow(max(along * .5 + .5, 0.0), 2.4);
+    float waveLod = 1.0 / (1.0 + pow(k * gridDist * .0055, 2.0));
+    float a = uWaveA[i].w * uAmplitude * dirWeight * waveLod;
     float q = uWaveB[i].y;
     float theta = k * dot(d, p) - sqrt(9.81 * k) * uWaveTime + uWaveB[i].x;
     float s = sin(theta), c = cos(theta);
@@ -111,9 +113,11 @@ void main() {
   vec3 V = toCamera / distance;
   // Fine detail would alias in the distance; it hands over to rougher glitter.
   float near = exp(-distance * .018);
+  const mat2 rot36 = mat2(.809, -.588, .588, .809);
+  const mat2 rot36Inv = mat2(.809, .588, -.588, .809);
   vec2 d0 = texture(uDetail, vWorld.xz * .061 - uDetailDrift * .021).xy * 2.0 - 1.0;
   vec2 d1 = uDetailLevel > .5 && distance < 260.0
-    ? texture(uDetail, vWorld.xz * .157 - uDetailDrift * .037 - vec2(-uDetailDrift.y, uDetailDrift.x) * .012).xy * 2.0 - 1.0
+    ? rot36Inv * (texture(uDetail, rot36 * (vWorld.xz * .157 - uDetailDrift * .037)).xy * 2.0 - 1.0)
     : vec2(0.0);
   vec2 detail = d0 * .62 + d1 * .38;
   float chop = clamp(length(d0 * .55 + d1 * .95) * .85, 0.0, 1.0);

@@ -479,7 +479,7 @@ function start() {
     const t = world.weatherTarget;
     const limit = (value, min, max) => Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
     if (!data) {
-      for (const key of Object.keys(t)) t[key] = 0;
+      for (const key of ['active', 'cloud', 'rain', 'snow', 'fog', 'storm']) t[key] = 0;
       if (state.weatherWind) setRange('wind', state.baseWind * 100);
       state.weatherWind = false;
     } else {

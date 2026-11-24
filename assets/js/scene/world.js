@@ -2,18 +2,26 @@ import { DEG, clamp, damp, lerp, mat4, smoothstep } from '../core/math.js';
 import { PRESETS, blendPreset, lightDirection, moonPhase, scatter, transmittance } from './atmosphere.js';
 import { WAVE_COUNT } from './renderer.js';
 
-// Omnidirectional 8-sector swell basis: 4 primary swells + 4 staggered shorter
-// wind-waves. Fixed basis directions prevent distant phase-swimming while a
-// smooth directional lobe lets visible wave travel follow any 360° wind angle.
+// 16-wave 4-octave twisted omnidirectional spectrum (66m long swells down to 4.5m chop).
+// Twisted non-orthogonal azimuths prevent checkerboard/egg-carton interference while
+// keeping all 4 octave bands active at every 360° wind direction.
 const SWELLS = [
-  [ .26, -.97, .215, 1.36, 1.1, .31], [ .96,  .28, .268, 1.34, 4.6, .31],
-  [-.24,  .97, .312, 1.38, 2.8, .32], [-.97, -.25, .358, 1.32, 5.9, .30],
-  [ .74, -.67, .445,  .90,  .6, .26], [ .69,  .72, .545,  .88, 5.2, .25],
-  [-.73,  .68, .665,  .86, 3.5, .24], [-.70, -.71, .795,  .82, 1.9, .22],
+  // Long ocean swells (42–66m)
+  [ .9703,  .2419, .096, 1.32, .71, .30], [-.3256,  .9455, .114, 1.24, 2.84, .29],
+  [-.9816, -.1908, .132, 1.18, 4.92, .29], [ .2419, -.9703, .153, 1.12, 1.63, .28],
+  // Primary swells (18–32m, twisted)
+  [ .5299,  .8480, .197, 1.04, 3.41, .28], [-.7986,  .6018, .236,  .96, 5.58, .27],
+  [-.5150, -.8572, .281,  .88,  .94, .27], [ .8387, -.5446, .334,  .81, 2.67, .26],
+  // Mid wind-waves (8.5–15m, twisted)
+  [ .1219,  .9925, .413,  .66, 4.25, .25], [-.9976,  .0698, .491,  .58, 1.18, .24],
+  [-.1564, -.9877, .589,  .51, 5.12, .23], [ .9903, -.1392, .701,  .44, 2.39, .22],
+  // Short asymmetric chop (4.5–7.5m, twisted)
+  [ .8290,  .5592, .839,  .34, 3.88, .21], [-.5878,  .8090, .997,  .28,  .52, .20],
+  [-.7986, -.6018, 1.187, .23, 4.71, .19], [ .6157, -.7880, 1.409, .19, 1.95, .18],
 ];
 
 const INITIAL_WIND_ANGLE = 2.15;
-const swellWeight = along => .14 + .86 * Math.pow(Math.max(along * .5 + .5, 0), 3.2);
+const swellWeight = along => .12 + .88 * Math.pow(Math.max(along * .5 + .5, 0), 2.4);
 
 const EYE = 6.4;
 export const CRUISE = 64;
@@ -35,6 +43,7 @@ export class World {
     this.ripples = [];
     this.cloudOffset = [0, 0];
     this.detailDrift = [0, 0];
+    this.windAngle = INITIAL_WIND_ANGLE;
     this.windWander = { angle: INITIAL_WIND_ANGLE, target: INITIAL_WIND_ANGLE + .52, nextTurn: 18, veer: 0, veerTarget: .18, nextVeer: 14 };
     this.dive = 0;
     this.cruise = 0;
@@ -48,7 +57,7 @@ export class World {
     this.presetTarget = PRESETS[theme];
     this.presetBlend = 1;
 
-    this.weather = { active: 0, cloud: 0, rain: 0, snow: 0, fog: 0, storm: 0, angle: 0 };
+    this.weather = { active: 0, cloud: 0, rain: 0, snow: 0, fog: 0, storm: 0, angle: INITIAL_WIND_ANGLE };
     this.weatherTarget = { ...this.weather };
 
     const wavesA = new Float32Array(WAVE_COUNT * 4), wavesB = new Float32Array(WAVE_COUNT * 4);
@@ -99,7 +108,13 @@ export class World {
     if (!PRESETS[name]) return;
     this.theme = name;
     if (this.presetTarget === PRESETS[name]) return;
-    this.presetFrom = { ...this.preset, water: [...this.preset.water], ink: [...this.preset.ink] };
+    this.presetFrom = {
+      ...this.preset,
+      water: [...this.preset.water],
+      ink: [...this.preset.ink],
+      gradeShadow: [...this.preset.gradeShadow],
+      gradeHighlight: [...this.preset.gradeHighlight],
+    };
     this.presetTarget = PRESETS[name];
     this.presetBlend = animate ? 0 : 1;
     if (!animate) blendPreset(this.preset, this.presetFrom, this.presetTarget, 1);
@@ -245,13 +260,22 @@ export class World {
 
   updateWeather(dt) {
     const rate = 1 / 2.6;
+    const snapAngle = this.weather.active < .01 && this.weatherTarget.active > 0;
     let settling = false;
     for (const key of Object.keys(this.weather)) {
       const target = this.weatherTarget[key];
       let current = this.weather[key];
-      if (key === 'angle') current += Math.atan2(Math.sin(target - current), Math.cos(target - current)) * (1 - Math.exp(-rate * dt));
-      else current = damp(current, target, rate, dt);
-      if (Math.abs(current - target) < 5e-4) current = target; else settling = true;
+      if (key === 'angle') {
+        if (snapAngle) current = target;
+        else {
+          const diff = Math.atan2(Math.sin(target - current), Math.cos(target - current));
+          if (Math.abs(diff) < 5e-4) current = target;
+          else { current += diff * (1 - Math.exp(-rate * dt)); settling = true; }
+        }
+      } else {
+        current = damp(current, target, rate, dt);
+        if (Math.abs(current - target) < 5e-4) current = target; else settling = true;
+      }
       this.weather[key] = current;
     }
     return settling;
@@ -292,12 +316,15 @@ export class World {
     this.waveWind = damp(this.waveWind, this.wind, 1 / 2.4, reducedMotion ? 1e3 : dt);
     if (Math.abs(this.waveWind - this.wind) < 5e-4) this.waveWind = this.wind; else animating = true;
     const w = this.weather, ww = this.windWander;
+    const weatherActive = this.weatherTarget.active > 0;
     if (!this.paused) {
-      if (this.time >= ww.nextTurn) {
-        ww.target = ww.angle + (this.random() < .5 ? -1 : 1) * (.55 + this.random() * .85);
-        ww.nextTurn = this.time + 22 + this.random() * 20;
+      if (!weatherActive) {
+        if (this.time >= ww.nextTurn) {
+          ww.target = ww.angle + (this.random() < .5 ? -1 : 1) * (.55 + this.random() * .85);
+          ww.nextTurn = this.time + 22 + this.random() * 20;
+        }
+        ww.angle += Math.atan2(Math.sin(ww.target - ww.angle), Math.cos(ww.target - ww.angle)) * (1 - Math.exp(-dt / 18));
       }
-      ww.angle += Math.atan2(Math.sin(ww.target - ww.angle), Math.cos(ww.target - ww.angle)) * (1 - Math.exp(-dt / 18));
       if (this.time >= ww.nextVeer) {
         ww.veerTarget = (this.random() * 2 - 1) * (.38 + w.storm * .12);
         ww.nextVeer = this.time + 14 + this.random() * 16;
@@ -305,10 +332,22 @@ export class World {
       ww.veer = damp(ww.veer, ww.veerTarget, 1 / 12, dt);
     }
 
-    const weatherAngle = w.angle + ww.veer;
-    const angleDiff = Math.atan2(Math.sin(weatherAngle - ww.angle), Math.cos(weatherAngle - ww.angle));
-    const effAngle = ww.angle + angleDiff * w.active;
-    const wx = Math.sin(effAngle), wz = -Math.cos(effAngle);
+    const targetAngle = weatherActive ? this.weatherTarget.angle + ww.veer : ww.angle;
+    if (!this.paused || reducedMotion) {
+      const err = Math.atan2(Math.sin(targetAngle - this.windAngle), Math.cos(targetAngle - this.windAngle));
+      if (reducedMotion) {
+        this.windAngle += err;
+      } else {
+        const maxTurn = .18 * dt;
+        const step = err * (1 - Math.exp(-dt / 4.5));
+        this.windAngle += Math.sign(step) * Math.min(Math.abs(step), maxTurn);
+      }
+    }
+    if (weatherActive) {
+      ww.angle = this.windAngle;
+      ww.target = this.windAngle + .45;
+    }
+    const wx = Math.sin(this.windAngle), wz = -Math.cos(this.windAngle);
     const gust = 1 + .08 * Math.sin(this.time * .21) * Math.cos(this.time * .13);
 
     this.clouds = damp(this.clouds, this.cloudsTarget, 3, reducedMotion ? 1e3 : dt);
