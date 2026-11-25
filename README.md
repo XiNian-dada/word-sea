@@ -37,7 +37,7 @@
 
 - **三个共用骨架的场景**：首页字海（文章列表、分类/标签/搜索复用）、深潜文章语廊（正文与普通独立页面，约 3.2 秒下潜 / 上浮连续镜头）、海上灯火（友链独立页面，约 3.4 秒航行与分页）。
 - **气象、时段与生态模拟**：破晓、清晨、正午、午后、夕照、月夜六时段（基于臭氧吸收与暗视觉褪色），球壳弧面体积云与 `5.8 km` 高空卷云，接入 Open-Meteo 实况雨雪雾雷，以及 3D 建模海鸥群、飞鱼与夜间流星/罕见极光。
-- **零外部依赖的阅读体验**：内置 36 句 23 语言名言卡片与双墙同步金光高亮、顶部细水位线进度条、右侧自动提取 `h1`–`h3` 的折叠刻度目录、本地续读书签、GitHub/Obsidian 风格 Callouts（如 `> [!NOTE]`）、本地按需语法高亮（PrismJS 1.30.0，带复制按钮）与原生图片灯箱（支持双指/滚轮缩放）。
+- **零外部依赖的阅读体验**：内置 36 句 23 语言名言卡片与双墙同步金光高亮、顶部细水位线进度条、右侧自动提取 `h1`–`h3` 的折叠刻度目录、本地续读书签、GitHub/Obsidian 风格 Callouts（如 `> [!NOTE]`）、离线按需代码高亮（PrismJS 1.30.0，带复制按钮）、离线按需 LaTeX 公式渲染（KaTeX 0.19.1 WOFF2，支持 `$...$`、`$$...$$`、`\(...\)` 与 `\[...\]`）与原生图片灯箱（支持双指/滚轮缩放）。
 - **原生缓存与静默兜底**：`functions.php` 根据文件 `filemtime()` 自动生成 `?v=` 资源查询串与全量 ES Import Map，覆盖更新无需清理构建产物；阅读静止、切至后台或系统启用「减少动态效果」时自动暂停绘制循环。
 
 ```mermaid
@@ -133,7 +133,7 @@ node --test tests/scene.test.mjs
 
 - [更新日志（CHANGELOG.md）](CHANGELOG.md)：`0.1.1` 至 `0.4.0` 的完整版本演进。
 - [名言出典（QUOTES.md）](QUOTES.md)：语廊高墙 36 句、23 种语言原文与原典出处。
-- [开源协议（LICENSE.txt）](LICENSE.txt) 与 [PrismJS MIT 协议](assets/vendor/prism-LICENSE.txt)。
+- [开源协议（LICENSE.txt）](LICENSE.txt)、[PrismJS MIT 协议](assets/vendor/prism-LICENSE.txt) 与 [KaTeX MIT 协议](assets/vendor/katex/LICENSE)。
 
 <details>
 <summary><b>主题目录文件概览</b></summary>
@@ -148,18 +148,20 @@ word-sea/
 │   ├── css/theme.css                    # 三场景统一布局、毛玻璃卡片、Callouts 与响应式断点样式
 │   ├── collect-data.js                  # 语廊 36 句名言结构化译文与出处数据
 │   ├── admin.js / admin.css             # 后台可视化友链管理器
-│   ├── vendor/prism.js                  # 离线代码高亮库 PrismJS 1.30.0 (MIT)
+│   ├── vendor/
+│   │   ├── prism.js                     # 离线代码高亮库 PrismJS 1.30.0 (MIT)
+│   │   └── katex/                       # 离线公式渲染库 KaTeX 0.19.1 WOFF2 (MIT)
 │   └── js/
 │       ├── main.js                      # 前端唯一模块入口
 │       ├── core/math.js                 # 向量、矩阵与插值工具
 │       ├── gl/                          # WebGL2 上下文与着色器源码 (sky / ocean / corridor)
 │       ├── scene/                       # 单画布调度 (app / world / renderer / quality / pacing / textures / particles / corridor / atlas)
-│       └── ui/                          # 导航、天气面板、阅读目录与进度、拾句卡、代码与灯箱、响应式弹层
-└── tests/scene.test.mjs                 # 核心场景行为与自适应策略单元测试（不包含在发布安装包内）
+│       └── ui/                          # 导航、天气面板、阅读目录与进度、拾句卡、代码/公式按需渲染、灯箱与响应式弹层
+└── tests/scene.test.mjs                 # 核心场景行为、公式解析与自适应策略单元测试（不包含在发布安装包内）
 ```
 
 </details>
 
 ## 开源协议
 
-「字海 Word Sea」主题源码依据 [GNU General Public License v2.0 or later](LICENSE.txt)（`GPL-2.0-or-later`）开源。内嵌的 PrismJS 1.30.0 语法高亮库依据 MIT 协议分发，详见 [assets/vendor/prism-LICENSE.txt](assets/vendor/prism-LICENSE.txt)；名言原文版权与出处标注见 [QUOTES.md](QUOTES.md)。
+「字海 Word Sea」主题源码依据 [GNU General Public License v2.0 or later](LICENSE.txt)（`GPL-2.0-or-later`）开源。内嵌的 PrismJS 1.30.0 语法高亮库与 KaTeX 0.19.1 公式渲染库均依据 MIT 协议分发，分别见 [assets/vendor/prism-LICENSE.txt](assets/vendor/prism-LICENSE.txt) 与 [assets/vendor/katex/LICENSE](assets/vendor/katex/LICENSE)；名言原文版权与出处标注见 [QUOTES.md](QUOTES.md)。

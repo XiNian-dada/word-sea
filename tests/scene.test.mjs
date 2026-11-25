@@ -5,6 +5,7 @@ import { Corridor } from '../assets/js/scene/corridor.js';
 import { Governor } from '../assets/js/scene/pacing.js';
 import { TIERS, QualityController, atlasSizeFor, detectInitialTier, parseQualityOverride, shouldUseAntialias } from '../assets/js/scene/quality.js';
 import { easeInOut, mat4 } from '../assets/js/core/math.js';
+import { extractDisplayTex, splitMath } from '../assets/js/ui/math-parser.js';
 
 // Camera and picking geometry can be exercised without a WebGL context.
 function cameraCorridor() {
@@ -429,4 +430,69 @@ test('weather transitions turn wind smoothly without branch-cut jumps and preser
   world.updateTheme(.6);
   assert.deepEqual(world.presetFrom.gradeShadow, shadowBefore);
   assert.deepEqual(world.presetFrom.gradeHighlight, highlightBefore);
+});
+
+test('math delimiter parser separates display/inline LaTeX and ignores currency dollars', () => {
+  // Plain currency prose must return null so non-math articles skip loading KaTeX.
+  for (const prose of [
+    'Costs $100 and $200 today.',
+    'Range is $5-$10 or ($50/$100).',
+    'Paid 100$ and 200$.',
+    String.raw`Escaped \$100 and \$200.`,
+    'Unclosed $x + y without mate.',
+    'Split\n\n$a + b\n\nc$ across blank line.',
+  ]) {
+    assert.equal(splitMath(prose), null, `expected null for: ${prose}`);
+  }
+
+  // Inline CJK adjacency + bracket delimiters + double backslash before closing $.
+  assert.deepEqual(splitMath('计算 $a+b=1$，再求 \\(c^2\\)。'), [
+    { type: 'text', value: '计算 ' },
+    { type: 'inline', value: 'a+b=1' },
+    { type: 'text', value: '，再求 ' },
+    { type: 'inline', value: 'c^2' },
+    { type: 'text', value: '。' },
+  ]);
+
+  assert.deepEqual(splitMath(String.raw`Line $a\\$ end`), [
+    { type: 'text', value: 'Line ' },
+    { type: 'inline', value: 'a\\\\' },
+    { type: 'text', value: ' end' },
+  ]);
+
+  // Leading literal currency `$5` must not swallow subsequent `($x=1$)` or `$y=2$`.
+  assert.deepEqual(splitMath('Costs $5, see ($x=1$) and $y=2$.'), [
+    { type: 'text', value: 'Costs $5, see (' },
+    { type: 'inline', value: 'x=1' },
+    { type: 'text', value: ') and ' },
+    { type: 'inline', value: 'y=2' },
+    { type: 'text', value: '.' },
+  ]);
+
+  // Display math with $$...$$ and \[...\].
+  assert.deepEqual(splitMath('Before $$E = mc^2$$ mid \\[x_1 + x_2\\] after'), [
+    { type: 'text', value: 'Before ' },
+    { type: 'display', value: 'E = mc^2' },
+    { type: 'text', value: ' mid ' },
+    { type: 'display', value: 'x_1 + x_2' },
+    { type: 'text', value: ' after' },
+  ]);
+
+  // Escaped `\\]` does not prematurely close `\[...\]`.
+  assert.deepEqual(splitMath(String.raw`\[a \\ b\]`), [
+    { type: 'display', value: String.raw`a \\ b` },
+  ]);
+
+  // HyperDown display paragraph reconstruction restores `<em>` back to `_..._`.
+  assert.equal(
+    extractDisplayTex([
+      { kind: 'text', value: '$$a' },
+      { kind: 'em', value: 'i + b' },
+      { kind: 'text', value: 'i = c' },
+      { kind: 'br' },
+      { kind: 'text', value: '+ d$$' },
+    ]),
+    'a_i + b_i = c\n+ d',
+  );
+  assert.equal(extractDisplayTex([{ kind: 'text', value: '$$a$$ and $$b$$' }]), null);
 });

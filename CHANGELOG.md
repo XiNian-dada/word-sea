@@ -2,6 +2,11 @@
 
 本文档记录「字海 Word Sea」Typecho 主题各版本的视觉、交互与工程变更。当前完整源码与历史记录托管于 [Forgejo 仓库](https://akyuu.leeinx.com/XiNian-dada/word-sea)。
 
+## [Unreleased]
+
+- **排版细节修正**：正文 `sup` / `sub` 上下标改为 `line-height: 0` 相对偏移以避免撑高所在行行距，补充 Markdown `.footnotes` 脚注区、原生 `<details>` 折叠块（非 Callout）卡片边界及行内 `code` 水平留白。
+- **离线按需 LaTeX 公式渲染**：内嵌裁剪为纯 WOFF2 字体的 KaTeX `0.19.1`（`assets/vendor/katex/`）并新增 `assets/js/ui/math.js` 与 `math-parser.js`。仅在文章包含有效公式（支持 `$...$`、`$$...$$`、`\(...\)`、`\[...\]` 及独立公式段落的 HyperDown 下划线还原）时延迟加载，不含公式或仅含货币符号（如 `$100`）的文章零额外请求。
+
 ## [0.4.0] - 2026-11-24
 
 基于 `v0.3.10` 的完整视觉、气象、波浪与性能自适应重构版本：
