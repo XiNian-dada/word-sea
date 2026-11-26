@@ -29,4 +29,4 @@ jobs:
           RELEASE_TAG: ${{ forgejo.ref_name }}
           RELEASE_SHA: ${{ forgejo.sha }}
           GITHUB_REPOSITORY: ${{ forgejo.repository }}
-          GITHUB_RELEASE_TOKEN: ${{ secrets.GITHUB_RELEASE_TOKEN }}
+          GH_RELEASE_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}

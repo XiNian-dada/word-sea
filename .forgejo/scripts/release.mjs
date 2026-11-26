@@ -6,17 +6,19 @@ const {
   RELEASE_TAG: tag,
   RELEASE_SHA: sha,
   GITHUB_REPOSITORY: repository,
-  GITHUB_RELEASE_TOKEN: token,
+  GH_RELEASE_TOKEN: ghToken,
+  GITHUB_RELEASE_TOKEN: legacyToken,
   GITHUB_API_URL: apiUrl = 'https://api.github.com',
 } = process.env;
+const token = (ghToken || legacyToken || '').trim();
 
 if (![tag, sha, repository].every(Boolean)) {
   throw new Error('RELEASE_TAG, RELEASE_SHA and GITHUB_REPOSITORY are required');
 }
 if (!token) {
   throw new Error(
-    'GITHUB_RELEASE_TOKEN secret is required ' +
-    '(create a GitHub Fine-grained PAT with Contents: Read and write and add it to Forgejo Actions Secrets)',
+    'GH_RELEASE_TOKEN secret is required ' +
+    '(create a GitHub Fine-grained PAT with Contents: Read and write and add it to Forgejo Actions Secrets as GH_RELEASE_TOKEN)',
   );
 }
 
