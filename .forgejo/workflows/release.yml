@@ -21,12 +21,12 @@ jobs:
         run: node .forgejo/scripts/package.mjs
         env:
           RELEASE_TAG: ${{ forgejo.ref_name }}
-      - name: Publish release with ZIP attachment
+      - name: Publish GitHub Release with ZIP attachment
         if: startsWith(forgejo.ref, 'refs/tags/')
         run: node .forgejo/scripts/release.mjs
         env:
+          NODE_USE_ENV_PROXY: '1'
           RELEASE_TAG: ${{ forgejo.ref_name }}
           RELEASE_SHA: ${{ forgejo.sha }}
-          RELEASE_REPOSITORY: ${{ forgejo.repository }}
-          RELEASE_API_URL: ${{ forgejo.api_url }}
-          RELEASE_TOKEN: ${{ forgejo.token }}
+          GITHUB_REPOSITORY: ${{ forgejo.repository }}
+          GITHUB_RELEASE_TOKEN: ${{ secrets.GITHUB_RELEASE_TOKEN }}
